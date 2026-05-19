@@ -217,6 +217,7 @@ export function POSClient({ products, cashierName, branchId: defaultBranch, onLo
   const supabase = createClient()
 
   const [screen, setScreen] = useState<Screen>('pos')
+  const [mobileTab, setMobileTab] = useState<'products' | 'cart'>('products')
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('All')
   const [cart, setCart] = useState<CartItem[]>([])
@@ -392,39 +393,66 @@ export function POSClient({ products, cashierName, branchId: defaultBranch, onLo
       {screen === 'confirm' && <ConfirmModal total={total} paymentMethod={paymentMethod} splitMode={splitMode} split={split} cashPaid={cashPaid} change={change} customerName={customerName} itemCount={itemCount} onConfirm={handleConfirmed} onCancel={() => { setScreen('pos'); setProcessError('') }} processing={processing} error={processError} />}
       {screen === 'receipt' && receipt && <POSReceipt receipt={receipt} onNewSale={handleNewSale} />}
 
-      <div className="flex h-full">
+      {/* Mobile tab bar — only visible on small screens */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-30 flex"
+        style={{ background: '#2C2420', borderTop: '1px solid rgba(255,255,255,0.1)', height: '56px' }}>
+        <button onClick={() => setMobileTab('products')}
+          className="flex-1 flex flex-col items-center justify-center gap-0.5"
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: mobileTab === 'products' ? '#E8B4A0' : 'rgba(255,255,255,0.4)' }}>
+          <ShoppingBag size={18} />
+          <span style={{ fontFamily: "'Jost', sans-serif", fontSize: '10px', fontWeight: 300 }}>Products</span>
+        </button>
+        <button onClick={() => setMobileTab('cart')}
+          className="flex-1 flex flex-col items-center justify-center gap-0.5 relative"
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: mobileTab === 'cart' ? '#E8B4A0' : 'rgba(255,255,255,0.4)' }}>
+          <div className="relative">
+            <ShoppingBag size={18} />
+            {itemCount > 0 && (
+              <span style={{ position: 'absolute', top: '-6px', right: '-8px', background: '#B76E79', color: 'white', borderRadius: '50%', width: '16px', height: '16px', fontSize: '9px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Jost', sans-serif" }}>
+                {itemCount}
+              </span>
+            )}
+          </div>
+          <span style={{ fontFamily: "'Jost', sans-serif", fontSize: '10px', fontWeight: 300 }}>Cart</span>
+        </button>
+      </div>
+
+      <div className="flex h-full relative" style={{ paddingBottom: 0 }}>
 
         {/* ── LEFT ─────────────────────────────────────────────────────────── */}
-        <div className="flex flex-col flex-1 min-w-0 h-full">
+        <div className="flex flex-col flex-1 min-w-0 h-full" style={{ display: mobileTab === "cart" ? "none" : undefined }}>
 
           {/* Top bar */}
-          <div className="flex items-center gap-3 px-4 py-3"
-            style={{ background: '#2C2420', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-            <div style={{ fontFamily: "'Cormorant Garamond', serif", fontWeight: 300, fontSize: '18px', color: 'white', flexShrink: 0 }}>
+          <div style={{ background: '#2C2420', borderBottom: '1px solid rgba(255,255,255,0.08)', padding: '10px 12px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'nowrap' }}>
+            {/* Logo - hidden on very small screens */}
+            <div className="hidden sm:block" style={{ fontFamily: "'Cormorant Garamond', serif", fontWeight: 300, fontSize: '16px', color: 'white', flexShrink: 0 }}>
               DBB <span style={{ color: '#E8B4A0' }}>·</span> POS
             </div>
-            <div className="relative flex-1">
-              <Search size={14} color="#B76E79" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+            {/* Search */}
+            <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+              <Search size={13} color="#B76E79" style={{ position: 'absolute', left: '9px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
               <input value={search} onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search product, brand, SKU…"
-                style={{ ...inputBase, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', color: 'white', paddingLeft: '32px' }} />
+                placeholder="Search…"
+                style={{ ...inputBase, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', color: 'white', paddingLeft: '29px', width: '100%', fontSize: '13px' }} />
             </div>
             {/* Branch selector */}
-            <div className="flex items-center gap-1.5 flex-shrink-0">
-              <MapPin size={12} color="#E8B4A0" />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+              <MapPin size={11} color="#E8B4A0" />
               <select value={activeBranch} onChange={(e) => setActiveBranch(e.target.value)}
-                style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'white', fontFamily: "'Jost', sans-serif", fontSize: '11px', fontWeight: 300, padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', outline: 'none' }}>
+                style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'white', fontFamily: "'Jost', sans-serif", fontSize: '11px', fontWeight: 300, padding: '4px 6px', borderRadius: '4px', cursor: 'pointer', outline: 'none', maxWidth: '110px' }}>
                 {BRANCHES.map((b) => <option key={b.id} value={b.id} style={{ background: '#2C2420' }}>{b.label}</option>)}
               </select>
             </div>
-            <div className="flex items-center gap-1.5 flex-shrink-0">
-              <Clock size={12} color="rgba(255,255,255,0.4)" />
-              <span style={{ fontFamily: "'Jost', sans-serif", fontSize: '11px', color: 'rgba(255,255,255,0.4)' }}>
+            {/* Clock - hidden on mobile */}
+            <div className="hidden sm:flex" style={{ alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+              <Clock size={11} color="rgba(255,255,255,0.4)" />
+              <span style={{ fontFamily: "'Jost', sans-serif", fontSize: '11px', color: 'rgba(255,255,255,0.4)', whiteSpace: 'nowrap' }}>
                 {new Date().toLocaleTimeString('en-GH', { hour: '2-digit', minute: '2-digit' })}
               </span>
             </div>
+            {/* Logout */}
             <button onClick={onLogout ?? (() => window.location.href = '/admin')}
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '28px', height: '28px', borderRadius: '50%', background: 'rgba(255,255,255,0.08)', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.4)' }}>
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '28px', height: '28px', borderRadius: '50%', background: 'rgba(255,255,255,0.08)', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.4)', flexShrink: 0 }}>
               <LogOut size={12} />
             </button>
           </div>
@@ -463,7 +491,7 @@ export function POSClient({ products, cashierName, branchId: defaultBranch, onLo
 
         {/* ── RIGHT ────────────────────────────────────────────────────────── */}
         <div className="flex flex-col h-full border-l"
-          style={{ width: '340px', flexShrink: 0, borderColor: '#E8DDD4', background: 'white' }}>
+          style={{ width: mobileTab === "cart" ? "100%" : "340px", flexShrink: 0, borderColor: "#E8DDD4", background: "white", display: mobileTab === "products" ? "none" : "flex" }}>
 
           {/* Cart header */}
           <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: '#E8DDD4' }}>

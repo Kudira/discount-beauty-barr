@@ -28,10 +28,7 @@ export function POSAuthWrapper({ products, staff, currentUserName, currentUserRo
   const [pin, setPin] = useState('')
   const [error, setError] = useState('')
 
-  const handleDigit = (d: string) => {
-    if (pin.length < 6) setPin((p) => p + d)
-  }
-
+  const handleDigit = (d: string) => { if (pin.length < 6) setPin((p) => p + d) }
   const handleDelete = () => setPin((p) => p.slice(0, -1))
 
   const handleLogin = () => {
@@ -65,32 +62,45 @@ export function POSAuthWrapper({ products, staff, currentUserName, currentUserRo
     )
   }
 
-  // PIN login screen
   return (
-    <div className="min-h-screen flex items-center justify-center"
-      style={{ background: '#2C2420' }}>
-      <div className="flex flex-col items-center gap-6 w-full max-w-sm px-4">
+    <div style={{
+      minHeight: '100vh',
+      overflowY: 'auto',
+      background: '#2C2420',
+      display: 'flex',
+      alignItems: 'flex-start',
+      justifyContent: 'center',
+      padding: '24px 16px',
+    }}>
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: '20px',
+        width: '100%',
+        maxWidth: '360px',
+        paddingBottom: '24px',
+      }}>
 
         {/* Logo */}
-        <div className="text-center mb-2">
-          <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontWeight: 300, fontSize: '26px', color: 'white', letterSpacing: '0.04em' }}>
+        <div style={{ textAlign: 'center' }}>
+          <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontWeight: 300, fontSize: '24px', color: 'white', letterSpacing: '0.04em', margin: 0 }}>
             Discount Beauty Barr<span style={{ color: '#E8B4A0' }}>.</span>
           </h1>
-          <p style={{ fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '12px', color: 'rgba(255,255,255,0.4)', marginTop: '4px', letterSpacing: '0.15em', textTransform: 'uppercase' }}>
+          <p style={{ fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginTop: '4px', letterSpacing: '0.15em', textTransform: 'uppercase' }}>
             Point of Sale
           </p>
         </div>
 
         {/* Staff selector */}
-        <div className="w-full">
+        <div style={{ width: '100%' }}>
           <p style={{ fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '12px', color: 'rgba(255,255,255,0.5)', marginBottom: '8px', textAlign: 'center' }}>
-            Who's signing in?
+            Who&apos;s signing in?
           </p>
-          <div className="grid grid-cols-2 gap-2">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
             {staff.length === 0 ? (
-              <div className="col-span-2 text-center p-4"
-                style={{ background: 'rgba(255,255,255,0.08)', borderRadius: '8px' }}>
-                <p style={{ fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '13px', color: 'rgba(255,255,255,0.5)' }}>
+              <div style={{ gridColumn: 'span 2', textAlign: 'center', padding: '16px', background: 'rgba(255,255,255,0.08)', borderRadius: '8px' }}>
+                <p style={{ fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '13px', color: 'rgba(255,255,255,0.5)', margin: 0 }}>
                   No staff PINs set yet.
                 </p>
                 <p style={{ fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '11px', color: 'rgba(255,255,255,0.3)', marginTop: '4px' }}>
@@ -102,15 +112,15 @@ export function POSAuthWrapper({ products, staff, currentUserName, currentUserRo
                 <button key={s.id}
                   onClick={() => { setSelectedStaff(s); setPin(''); setError('') }}
                   style={{
-                    padding: '12px', borderRadius: '8px', border: 'none', cursor: 'pointer',
+                    padding: '10px 8px', borderRadius: '8px', border: 'none', cursor: 'pointer',
                     background: selectedStaff?.id === s.id ? '#B76E79' : 'rgba(255,255,255,0.1)',
-                    transition: 'background 0.15s',
+                    transition: 'background 0.15s', textAlign: 'center',
                   }}>
-                  <p style={{ fontFamily: "'Jost', sans-serif", fontWeight: selectedStaff?.id === s.id ? 400 : 300, fontSize: '13px', color: 'white' }}>
+                  <p style={{ fontFamily: "'Jost', sans-serif", fontWeight: selectedStaff?.id === s.id ? 400 : 300, fontSize: '13px', color: 'white', margin: 0 }}>
                     {s.full_name || 'Unknown'}
                   </p>
                   <p style={{ fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginTop: '2px', textTransform: 'capitalize' }}>
-                    {s.role} {s.branch_id ? `· ${s.branch_id.replace('-', ' ')}` : ''}
+                    {s.role}{s.branch_id ? ` · ${s.branch_id.replace('-', ' ')}` : ''}
                   </p>
                 </button>
               ))
@@ -118,43 +128,43 @@ export function POSAuthWrapper({ products, staff, currentUserName, currentUserRo
           </div>
         </div>
 
-        {/* PIN display */}
+        {/* PIN section — only shows after staff selected */}
         {selectedStaff && (
           <>
-            <div className="flex gap-3 items-center">
+            {/* PIN dots */}
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
               {[0,1,2,3,4,5].map((i) => (
-                <div key={i}
-                  style={{
-                    width: '14px', height: '14px', borderRadius: '50%',
-                    background: i < pin.length ? '#E8B4A0' : 'rgba(255,255,255,0.15)',
-                    transition: 'background 0.15s',
-                  }} />
+                <div key={i} style={{
+                  width: '12px', height: '12px', borderRadius: '50%',
+                  background: i < pin.length ? '#E8B4A0' : 'rgba(255,255,255,0.15)',
+                  transition: 'background 0.15s',
+                }} />
               ))}
             </div>
 
             {error && (
-              <p style={{ fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '13px', color: '#FCA5A5', textAlign: 'center' }}>
+              <p style={{ fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '13px', color: '#FCA5A5', textAlign: 'center', margin: 0 }}>
                 {error}
               </p>
             )}
 
             {/* Numpad */}
-            <div className="grid grid-cols-3 gap-3 w-full">
-              {['1','2','3','4','5','6','7','8','9','',  '0','⌫'].map((d, i) => {
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', width: '100%' }}>
+              {['1','2','3','4','5','6','7','8','9','','0','⌫'].map((d, i) => {
                 if (d === '') return <div key={i} />
                 return (
                   <button key={i}
                     onClick={() => d === '⌫' ? handleDelete() : handleDigit(d)}
                     style={{
-                      height: '64px', borderRadius: '8px', border: 'none', cursor: 'pointer',
+                      height: '58px', borderRadius: '8px', border: 'none', cursor: 'pointer',
                       background: 'rgba(255,255,255,0.1)', color: 'white',
                       fontFamily: d === '⌫' ? 'system-ui' : "'Cormorant Garamond', serif",
-                      fontSize: d === '⌫' ? '20px' : '26px', fontWeight: 300,
-                      transition: 'background 0.1s',
+                      fontSize: d === '⌫' ? '18px' : '24px', fontWeight: 300,
+                      transition: 'background 0.1s', display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}
-                    onMouseDown={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.2)')}
+                    onMouseDown={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.22)')}
                     onMouseUp={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.1)')}>
-                    {d === '⌫' ? <Delete size={20} className="inline" /> : d}
+                    {d}
                   </button>
                 )
               })}

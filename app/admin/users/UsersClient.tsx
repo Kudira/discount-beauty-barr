@@ -143,7 +143,7 @@ export function UsersClient({ users }: { users: any[] }) {
                 const rc = roleConfig[user.role]
                 const isEditing = editingId === user.id
                 const isPinEditing = pinEditId === user.id
-                const needsPin = ['cashier', 'manager', 'admin'].includes(user.role)
+                const needsPin = ['super_admin', 'admin', 'manager', 'cashier'].includes(user.role)
 
                 return (
                   <tr key={user.id} style={{ borderBottom: '1px solid #F2EDE8' }}>

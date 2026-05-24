@@ -420,7 +420,7 @@ export function POSClient({ products, cashierName, branchId: defaultBranch, onLo
       <div className="flex h-full relative" style={{ paddingBottom: 0 }}>
 
         {/* ── LEFT ─────────────────────────────────────────────────────────── */}
-        <div className="flex flex-col flex-1 min-w-0 h-full" style={{ display: mobileTab === "cart" ? "none" : undefined }}>
+        <div className={`flex flex-col flex-1 min-w-0 h-full ${mobileTab === "cart" ? "hidden lg:flex" : "flex"}`}>
 
           {/* Top bar */}
           <div style={{ background: '#2C2420', borderBottom: '1px solid rgba(255,255,255,0.08)', padding: '10px 12px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'nowrap' }}>
@@ -490,8 +490,8 @@ export function POSClient({ products, cashierName, branchId: defaultBranch, onLo
         </div>
 
         {/* ── RIGHT ────────────────────────────────────────────────────────── */}
-        <div className="flex flex-col h-full border-l"
-          style={{ width: mobileTab === "cart" ? "100%" : "340px", flexShrink: 0, borderColor: "#E8DDD4", background: "white", display: mobileTab === "products" ? "none" : "flex" }}>
+        <div className={`flex-col h-full border-l ${mobileTab === "products" ? "hidden lg:flex" : "flex"}`}
+          style={{ width: "340px", flexShrink: 0, borderColor: "#E8DDD4", background: "white" }}>
 
           {/* Cart header */}
           <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: '#E8DDD4' }}>

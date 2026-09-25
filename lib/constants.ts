@@ -38,8 +38,10 @@ export const FOOTER_LINKS = {
     { label: 'All Products', href: '/shop' },
     { label: 'Skincare', href: '/shop?category=skincare' },
     { label: 'Makeup', href: '/shop?category=makeup' },
-    { label: 'Haircare', href: '/shop?category=haircare' },
+    { label: 'Hair Care', href: '/shop?category=haircare' },
     { label: 'Fragrance', href: '/shop?category=fragrance' },
+    { label: 'Body Care', href: '/shop?category=body' },
+    { label: 'Wellness', href: '/shop?category=wellness' },
   ],
   company: [
     { label: 'About Us', href: '/about' },
@@ -56,13 +58,21 @@ export const FOOTER_LINKS = {
 }
 
 export const PRODUCT_CATEGORIES = [
-  { value: 'skincare', label: 'Skincare' },
-  { value: 'makeup', label: 'Makeup' },
-  { value: 'haircare', label: 'Haircare' },
-  { value: 'fragrance', label: 'Fragrance' },
-  { value: 'tools', label: 'Tools & Accessories' },
-  { value: 'body', label: 'Body Care' },
+  { value: 'skincare',  label: 'Skincare',                sym: '◎' },
+  { value: 'makeup',    label: 'Makeup',                  sym: '✦' },
+  { value: 'body',      label: 'Body Care',               sym: '❋' },
+  { value: 'haircare',  label: 'Hair Care',               sym: '⟡' },
+  { value: 'fragrance', label: 'Fragrance',               sym: '⬡' },
+  { value: 'wellness',  label: 'Wellness & Supplements',  sym: '✧' },
+  { value: 'oral-care', label: 'Oral Care',               sym: '◌' },
+  { value: 'personal',  label: 'Personal Care',           sym: '◇' },
+  { value: 'intimate',  label: 'Intimate Care',           sym: '♡' },
+  { value: 'home',      label: 'Home & Lifestyle',        sym: '⌂' },
+  { value: 'tools',     label: 'Tools & Accessories',     sym: '◈' },
 ] as const
+
+export const categoryLabel = (value: string) =>
+  PRODUCT_CATEGORIES.find((c) => c.value === value)?.label ?? value
 
 export const LOW_STOCK_THRESHOLD = 5
 export const DELIVERY_FEE = 30  // GHS

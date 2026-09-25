@@ -7,8 +7,9 @@ import { ArrowLeft, Upload, X, Plus, Trash2, Check, AlertCircle } from 'lucide-r
 import { createClient } from '@/lib/supabase/client'
 import { updateProduct, createVariant, updateVariant, createInventoryRows, logActivity } from '@/lib/actions'
 import { slugify } from '@/lib/utils'
+import { PRODUCT_CATEGORIES } from '@/lib/constants'
 
-const CATEGORIES = ['skincare', 'makeup', 'haircare', 'fragrance', 'tools', 'body']
+const CATEGORIES = PRODUCT_CATEGORIES
 const BUCKET = 'product-images'
 
 // ── Spinner ───────────────────────────────────────────────────────────────────
@@ -371,7 +372,7 @@ export function ProductEditClient({ product }: { product: any }) {
             <select value={form.category} onChange={set('category')}
               style={{ ...inputStyle, cursor: 'pointer' }}>
               {CATEGORIES.map((c) => (
-                <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+                <option key={c.value} value={c.value}>{c.label}</option>
               ))}
             </select>
           </div>

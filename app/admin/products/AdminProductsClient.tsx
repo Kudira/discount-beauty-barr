@@ -6,6 +6,7 @@ import { Plus, Search, Edit2, Eye, EyeOff, Star } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency } from '@/lib/utils'
 import { useRouter } from 'next/navigation'
+import { PRODUCT_CATEGORIES, categoryLabel } from '@/lib/constants'
 
 export function AdminProductsClient({ products }: { products: any[] }) {
   const [search, setSearch] = useState('')
@@ -32,7 +33,6 @@ export function AdminProductsClient({ products }: { products: any[] }) {
     setLocalProducts((prev) => prev.map((p) => p.id === id ? { ...p, is_featured: !current } : p))
   }
 
-  const CATEGORIES = ['all', 'skincare', 'makeup', 'haircare', 'fragrance', 'tools', 'body']
 
   return (
     <div className="p-6 lg:p-8 flex flex-col gap-6">
@@ -57,7 +57,8 @@ export function AdminProductsClient({ products }: { products: any[] }) {
         </div>
         <select value={category} onChange={(e) => setCategory(e.target.value)}
           style={{ padding: '10px 14px', background: 'white', border: '1px solid #D4C5B8', borderRadius: '4px', fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '13px', color: '#2C2420', outline: 'none', cursor: 'pointer' }}>
-          {CATEGORIES.map((c) => <option key={c} value={c}>{c === 'all' ? 'All Categories' : c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
+          <option value="all">All Categories</option>
+          {PRODUCT_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
         </select>
       </div>
 
@@ -83,7 +84,7 @@ export function AdminProductsClient({ products }: { products: any[] }) {
                       <p style={{ fontFamily: "'Jost', sans-serif", fontWeight: 400, fontSize: '13px', color: '#2C2420' }} className="truncate">{product.name}</p>
                     </td>
                     <td style={{ padding: '12px 14px' }}>
-                      <span style={{ fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '11px', color: '#B76E79', background: '#FDF5F6', padding: '2px 8px', borderRadius: '99px', textTransform: 'capitalize' }}>{product.category}</span>
+                      <span style={{ fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '11px', color: '#B76E79', background: '#FDF5F6', padding: '2px 8px', borderRadius: '99px', textTransform: 'capitalize' }}>{categoryLabel(product.category)}</span>
                     </td>
                     <td style={{ padding: '12px 14px' }}>
                       <span style={{ fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '13px', color: '#8C7B74' }}>{product.brand}</span>

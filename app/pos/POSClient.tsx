@@ -14,6 +14,7 @@ import { formatCurrency } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { createOrder, createOrderItems, createPayment, logActivity } from '@/lib/actions'
 import type { Product } from '@/types'
+import { PRODUCT_CATEGORIES } from '@/lib/constants'
 
 interface CartItem {
   productId: string
@@ -30,7 +31,7 @@ interface CartItem {
 type PaymentMethod = 'cash' | 'card' | 'momo_mtn' | 'momo_vodafone' | 'momo_airteltigo'
 type Screen = 'pos' | 'confirm' | 'receipt'
 
-const CATEGORIES = ['All', 'Skincare', 'Makeup', 'Haircare', 'Fragrance', 'Tools', 'Body']
+const CATEGORIES = [{ value: 'all', label: 'All' }, ...PRODUCT_CATEGORIES.map((c) => ({ value: c.value as string, label: c.label }))]
 const BRANCHES = [
   { id: 'osu', label: 'Osu Branch' },
   { id: 'east-legon', label: 'East Legon Branch' },
@@ -219,7 +220,7 @@ export function POSClient({ products, cashierName, branchId: defaultBranch, onLo
   const [screen, setScreen] = useState<Screen>('pos')
   const [mobileTab, setMobileTab] = useState<'products' | 'cart'>('products')
   const [search, setSearch] = useState('')
-  const [category, setCategory] = useState('All')
+  const [category, setCategory] = useState('all')
   const [cart, setCart] = useState<CartItem[]>([])
   const [variantProduct, setVariantProduct] = useState<Product | null>(null)
   const [qtyPicker, setQtyPicker] = useState<{ product: Product; variantId: string } | null>(null)
@@ -241,7 +242,7 @@ export function POSClient({ products, cashierName, branchId: defaultBranch, onLo
 
   // ── Computed ────────────────────────────────────────────────────────────────
   const filtered = useMemo(() => products.filter((p) => {
-    const matchCat = category === 'All' || p.category.toLowerCase() === category.toLowerCase()
+    const matchCat = category === 'all' || p.category === category
     const matchSearch = !search ||
       p.name.toLowerCase().includes(search.toLowerCase()) ||
       p.brand.toLowerCase().includes(search.toLowerCase()) ||
@@ -460,10 +461,10 @@ export function POSClient({ products, cashierName, branchId: defaultBranch, onLo
           {/* Category tabs */}
           <div className="flex gap-1.5 px-3 py-2 overflow-x-auto"
             style={{ background: '#FAF7F4', borderBottom: '1px solid #E8DDD4', flexShrink: 0 }}>
-            {CATEGORIES.map((cat) => (
+            {CATEGORIES.map(({ value: cat, label }) => (
               <button key={cat} onClick={() => setCategory(cat)}
                 style={{ padding: '5px 14px', borderRadius: '99px', cursor: 'pointer', background: category === cat ? '#2C2420' : 'white', color: category === cat ? 'white' : '#8C7B74', fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '12px', whiteSpace: 'nowrap', border: `1px solid ${category === cat ? 'transparent' : '#E8DDD4'}`, transition: 'all 0.15s' }}>
-                {cat}
+                {label}
               </button>
             ))}
           </div>

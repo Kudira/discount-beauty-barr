@@ -2,7 +2,7 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 
 export type UserRole = 'customer' | 'cashier' | 'manager' | 'admin'| 'super_admin'
 export type BranchId = 'osu' | 'east-legon'
-export type ProductCategory = 'skincare' | 'makeup' | 'haircare' | 'fragrance' | 'tools' | 'body'
+export type ProductCategory = 'skincare' | 'makeup' | 'haircare' | 'fragrance' | 'tools' | 'body' | 'wellness' | 'oral-care' | 'personal' | 'intimate' | 'home'
 export type OrderStatus = 'pending' | 'confirmed' | 'processing' | 'ready' | 'delivered' | 'cancelled' | 'refunded'
 export type FulfillmentType = 'delivery' | 'pickup'
 export type PaymentMethod = 'card' | 'mobile_money' | 'cash' | 'bank_transfer'

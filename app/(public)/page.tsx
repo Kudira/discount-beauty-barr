@@ -4,6 +4,7 @@ import { SectionHeading } from '@/components/shared/SectionHeading'
 import { ProductCard } from '@/components/shared/ProductCard'
 import { getFeaturedProducts } from '@/lib/getProducts'
 import { getPageContent } from '@/lib/getPageContent'
+import { PRODUCT_CATEGORIES } from '@/lib/constants'
 
 export const dynamic = 'force-dynamic'
 
@@ -153,14 +154,7 @@ export default async function HomePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <SectionHeading eyebrow="Shop by Category" title="What Are You Looking For?" align="center" />
           <div className="mt-10 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-            {[
-              { label: 'Skincare', href: '/shop?category=skincare', sym: '◎' },
-              { label: 'Makeup',   href: '/shop?category=makeup',   sym: '✦' },
-              { label: 'Haircare', href: '/shop?category=haircare', sym: '⟡' },
-              { label: 'Fragrance',href: '/shop?category=fragrance',sym: '⬡' },
-              { label: 'Tools',    href: '/shop?category=tools',    sym: '◈' },
-              { label: 'Body Care',href: '/shop?category=body',     sym: '❋' },
-            ].map((cat) => (
+            {PRODUCT_CATEGORIES.map((c) => ({ label: c.label, href: `/shop?category=${c.value}`, sym: c.sym })).map((cat) => (
               <Link key={cat.label} href={cat.href}
                 className="phase-card flex flex-col items-center gap-3 py-6 px-3 bg-white border border-[#E8DDD4] text-center"
                 style={{ textDecoration: 'none', borderRadius: '2px' }}>

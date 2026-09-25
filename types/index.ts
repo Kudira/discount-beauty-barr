@@ -6,6 +6,11 @@ export type ProductCategory =
   | 'fragrance'
   | 'tools'
   | 'body'
+  | 'wellness'
+  | 'oral-care'
+  | 'personal'
+  | 'intimate'
+  | 'home'
 
 export type ProductVariant = {
   id: string

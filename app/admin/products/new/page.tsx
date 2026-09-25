@@ -6,8 +6,9 @@ import Link from 'next/link'
 import { ArrowLeft, Plus, Trash2, Wand2 } from 'lucide-react'
 import { slugify } from '@/lib/utils'
 import { createProduct, createVariant, createInventoryRows, logActivity } from '@/lib/actions'
+import { PRODUCT_CATEGORIES } from '@/lib/constants'
 
-const CATEGORIES = ['skincare','makeup','haircare','fragrance','tools','body']
+const CATEGORIES = PRODUCT_CATEGORIES
 
 const inputStyle: React.CSSProperties = {
   width: '100%', padding: '10px 12px', background: 'white',
@@ -199,7 +200,7 @@ export default function NewProductPage() {
               <select required value={form.category}
                 onChange={e => setForm(p => ({ ...p, category: e.target.value }))}
                 style={{ ...inputStyle, cursor: 'pointer' }}>
-                {CATEGORIES.map(c => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
+                {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
               </select>
             </div>
 

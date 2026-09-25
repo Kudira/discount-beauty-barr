@@ -1,5 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
-import { sampleProducts } from '@/data/products'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import type { Product } from '@/types'
 
 function toProduct(row: any, stockMap?: Record<string, number>): Product {
@@ -16,7 +15,7 @@ function toProduct(row: any, stockMap?: Record<string, number>): Product {
       name: v.name,
       sku: v.sku,
       price: v.price,
-      stock: stockMap && Object.keys(stockMap).length > 0 ? (stockMap[v.id] ?? 0) : (v.stock ?? 20),
+      stock: stockMap?.[v.id] ?? 0,
       images: v.images ?? [],
     })),
     basePrice: row.base_price,
@@ -26,9 +25,13 @@ function toProduct(row: any, stockMap?: Record<string, number>): Product {
   }
 }
 
+// Inventory is RLS-protected (staff only), so read stock with the service-role
+// client on the server. Falls back to the session client if the key is missing.
 async function getStockMap(supabase: any): Promise<Record<string, number>> {
   try {
-    const { data } = await supabase
+    let reader = supabase
+    try { if (process.env.SUPABASE_SERVICE_ROLE_KEY) reader = createAdminClient() } catch {}
+    const { data } = await reader
       .from('inventory')
       .select('variant_id, quantity')
     if (!data) return {}
@@ -49,10 +52,10 @@ export async function getProducts(): Promise<Product[]> {
       supabase.from('products').select('*, product_variants(*)').eq('is_active', true).order('created_at', { ascending: false }),
       getStockMap(supabase),
     ])
-    if (!data || data.length === 0) return sampleProducts
+    if (!data) return []
     return data.map((p: any) => toProduct(p, stockMap))
   } catch {
-    return sampleProducts
+    return []
   }
 }
 
@@ -63,10 +66,10 @@ export async function getProductBySlugFromDB(slug: string): Promise<Product | nu
       supabase.from('products').select('*, product_variants(*)').eq('slug', slug).eq('is_active', true).single(),
       getStockMap(supabase),
     ])
-    if (!data) return sampleProducts.find((p) => p.slug === slug) ?? null
+    if (!data) return null
     return toProduct(data, stockMap)
   } catch {
-    return sampleProducts.find((p) => p.slug === slug) ?? null
+    return null
   }
 }
 
@@ -77,10 +80,10 @@ export async function getFeaturedProducts(): Promise<Product[]> {
       supabase.from('products').select('*, product_variants(*)').eq('is_active', true).eq('is_featured', true).order('created_at', { ascending: false }).limit(6),
       getStockMap(supabase),
     ])
-    if (!data || data.length === 0) return sampleProducts.filter((p) => p.isFeatured)
+    if (!data) return []
     return data.map((p: any) => toProduct(p, stockMap))
   } catch {
-    return sampleProducts.filter((p) => p.isFeatured)
+    return []
   }
 }
 
@@ -88,10 +91,8 @@ export async function getAllProductSlugs(): Promise<string[]> {
   try {
     const supabase = await createClient()
     const { data } = await supabase.from('products').select('slug').eq('is_active', true)
-    const dbSlugs = (data ?? []).map((p: any) => p.slug)
-    const localSlugs = sampleProducts.map((p) => p.slug)
-    return [...new Set([...dbSlugs, ...localSlugs])]
+    return (data ?? []).map((p: any) => p.slug)
   } catch {
-    return sampleProducts.map((p) => p.slug)
+    return []
   }
 }

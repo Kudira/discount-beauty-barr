@@ -28,9 +28,11 @@ export async function middleware(request: NextRequest) {
 
   const path = request.nextUrl.pathname
 
-  // ── Protected APIs: /api/admin/* and /api/pos/* ───────────
-  // Page routes redirect; API routes answer with JSON instead.
-  if (path.startsWith('/api/admin') || path.startsWith('/api/pos')) {
+  // ── Protected APIs: /api/admin/* — admin/manager login required ──
+  // /api/pos/* is NOT gated here: the POS PIN (checked inside those routes)
+  // is the only protection on the till, by design — no staff login needed
+  // to open the POS page or its APIs on the in-store terminal.
+  if (path.startsWith('/api/admin')) {
     if (!user) {
       return NextResponse.json({ error: 'Not signed in' }, { status: 401 })
     }
@@ -39,10 +41,7 @@ export async function middleware(request: NextRequest) {
       .select('role')
       .eq('id', user.id)
       .single()
-    const allowed = path.startsWith('/api/admin')
-      ? ['super_admin', 'admin', 'manager']
-      : ['super_admin', 'admin', 'manager', 'cashier']
-    if (!profile || !allowed.includes(profile.role)) {
+    if (!profile || !['super_admin', 'admin', 'manager'].includes(profile.role)) {
       return NextResponse.json({ error: 'Not allowed' }, { status: 403 })
     }
     return supabaseResponse
@@ -64,21 +63,8 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // ── Protected: /pos/* — staff, manager, admin only ────────
-  if (path.startsWith('/pos')) {
-    if (!user) {
-      return NextResponse.redirect(new URL('/login?redirect=/pos', request.url))
-    }
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-   if (!profile || !['super_admin', 'admin', 'manager', 'cashier'].includes(profile.role)) {
-      return NextResponse.redirect(new URL('/?error=unauthorized', request.url))
-    }
-  }
+  // /pos is intentionally NOT gated by staff login — see note above.
+  // The PIN keypad on that page is the only thing protecting the till.
 
   // ── Protected: /account/* — logged in customers ───────────
   if (path.startsWith('/account')) {
@@ -96,9 +82,7 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     '/admin/:path*',
-    '/pos/:path*',
     '/account/:path*',
     '/api/admin/:path*',
-    '/api/pos/:path*',
   ],
 }

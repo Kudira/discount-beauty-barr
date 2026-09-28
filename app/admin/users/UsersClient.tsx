@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Shield, Edit2, Check, X, KeyRound } from 'lucide-react'
+import { Shield, Edit2, Check, X, KeyRound, UserPlus } from 'lucide-react'
 import { updateUserRole, logActivity } from '@/lib/actions'
 import { useRouter } from 'next/navigation'
 
@@ -31,6 +31,37 @@ export function UsersClient({ users }: { users: any[] }) {
   const [pinValue, setPinValue] = useState('')
   const [savingPin, setSavingPin] = useState(false)
   const [pinMsg, setPinMsg] = useState('')
+
+  // ── Add cashier (no email/password — PIN only) ──────────────────────────
+  const [showAddCashier, setShowAddCashier] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [newBranch, setNewBranch] = useState('osu')
+  const [newPin, setNewPin] = useState('')
+  const [addingCashier, setAddingCashier] = useState(false)
+  const [addError, setAddError] = useState('')
+
+  const addCashier = async () => {
+    if (newName.trim().length < 2) { setAddError('Enter the cashier’s name.'); return }
+    if (newPin && !/^\d{4,6}$/.test(newPin)) { setAddError('PIN must be 4–6 digits.'); return }
+    setAddingCashier(true)
+    setAddError('')
+    try {
+      const res = await fetch('/api/admin/staff', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fullName: newName.trim(), branchId: newBranch, posPin: newPin || undefined }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) { setAddError(json.error ?? 'Could not add cashier.'); return }
+      setLocalUsers((p) => [json.user, ...p])
+      setNewName(''); setNewPin(''); setNewBranch('osu'); setShowAddCashier(false)
+      router.refresh()
+    } catch {
+      setAddError('No connection. Check the internet and try again.')
+    } finally {
+      setAddingCashier(false)
+    }
+  }
 
   const inputStyle: React.CSSProperties = {
     padding: '9px 12px', background: 'white', border: '1px solid #D4C5B8', borderRadius: '4px',
@@ -114,10 +145,57 @@ export function UsersClient({ users }: { users: any[] }) {
         ))}
       </div>
 
-      {/* Add member note */}
-      <div className="p-4" style={{ background: '#FAF7F4', border: '1px solid #E8DDD4', borderRadius: '4px' }}>
-        <p style={{ fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '13px', color: '#8C7B74', lineHeight: 1.6 }}>
-          <strong style={{ color: '#2C2420' }}>To add a team member:</strong> Ask them to create an account at <code style={{ background: '#F2EDE8', padding: '1px 5px', borderRadius: '3px', fontSize: '12px' }}>/register</code>, then find them here to set their role and branch.
+      {/* Add cashier — no account needed, PIN only */}
+      <div className="p-5 flex flex-col gap-4" style={{ background: '#FAF7F4', border: '1px solid #E8DDD4', borderRadius: '4px' }}>
+        <div className="flex items-center justify-between">
+          <div>
+            <p style={{ fontFamily: "'Cormorant Garamond', serif", fontWeight: 400, fontSize: '18px', color: '#2C2420' }}>Add a Cashier</p>
+            <p style={{ fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '12px', color: '#8C7B74', marginTop: '2px' }}>
+              No account needed — just a name, branch, and PIN. They sign in with the PIN at the till.
+            </p>
+          </div>
+          {!showAddCashier && (
+            <button onClick={() => setShowAddCashier(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 16px', background: '#2C2420', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontFamily: "'Jost', sans-serif", fontSize: '13px', flexShrink: 0 }}>
+              <UserPlus size={14} /> Add Cashier
+            </button>
+          )}
+        </div>
+
+        {showAddCashier && (
+          <div className="flex flex-col gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="sm:col-span-1">
+                <label style={{ fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '11px', color: '#8C7B74', display: 'block', marginBottom: '4px' }}>Full name</label>
+                <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Ama Mensah" style={{ ...inputStyle, width: '100%' }} />
+              </div>
+              <div>
+                <label style={{ fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '11px', color: '#8C7B74', display: 'block', marginBottom: '4px' }}>Branch</label>
+                <select value={newBranch} onChange={(e) => setNewBranch(e.target.value)} style={{ ...inputStyle, width: '100%', cursor: 'pointer' }}>
+                  {BRANCHES.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '11px', color: '#8C7B74', display: 'block', marginBottom: '4px' }}>POS PIN (4–6 digits, optional now)</label>
+                <input value={newPin} onChange={(e) => setNewPin(e.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" placeholder="Set later if you prefer" style={{ ...inputStyle, width: '100%' }} />
+              </div>
+            </div>
+            {addError && <p style={{ fontFamily: "'Jost', sans-serif", fontSize: '12px', color: '#DC2626' }}>{addError}</p>}
+            <div className="flex gap-2">
+              <button onClick={addCashier} disabled={addingCashier}
+                style={{ padding: '10px 18px', background: addingCashier ? '#8C7B74' : '#B76E79', color: 'white', border: 'none', borderRadius: '6px', cursor: addingCashier ? 'wait' : 'pointer', fontFamily: "'Jost', sans-serif", fontSize: '13px' }}>
+                {addingCashier ? 'Adding…' : 'Add Cashier'}
+              </button>
+              <button onClick={() => { setShowAddCashier(false); setAddError(''); setNewName(''); setNewPin('') }}
+                style={{ padding: '10px 18px', background: 'none', border: '1px solid #D4C5B8', borderRadius: '6px', cursor: 'pointer', fontFamily: "'Jost', sans-serif", fontSize: '13px', color: '#8C7B74' }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        <p style={{ fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '12px', color: '#8C7B74', lineHeight: 1.6, borderTop: '1px solid #E8DDD4', paddingTop: '10px' }}>
+          <strong style={{ color: '#2C2420' }}>To add an admin or manager instead:</strong> ask them to create an account at <code style={{ background: '#F2EDE8', padding: '1px 5px', borderRadius: '3px', fontSize: '12px' }}>/register</code>, then find them here to set their role. Those roles use the dashboard, so they need a real login.
         </p>
       </div>
 

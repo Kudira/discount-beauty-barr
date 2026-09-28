@@ -19,6 +19,7 @@ const ACTION_LABELS: Record<string, { label: string; color: string; bg: string }
   'payment.success':      { label: 'Online Payment',     color: '#16A34A', bg: '#F0FDF4' },
   'payment.amount_mismatch': { label: 'Payment Mismatch', color: '#DC2626', bg: '#FEF2F2' },
   'user.pin_updated':     { label: 'PIN Changed',        color: '#D97706', bg: '#FEF3C7' },
+  'staff.created':        { label: 'Cashier Added',      color: '#7C3AED', bg: '#F5F3FF' },
 }
 
 // Internal ids that aren't useful to read in the log

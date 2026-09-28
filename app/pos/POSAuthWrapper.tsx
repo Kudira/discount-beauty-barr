@@ -82,6 +82,7 @@ export function POSAuthWrapper({ products, defaultBranch, initialCashier }: POSA
         products={products}
         cashierName={cashier.name}
         branchId={cashier.branchId ?? defaultBranch}
+        branchLocked={cashier.branchId != null}
         onLogout={handleLogout}
       />
     )

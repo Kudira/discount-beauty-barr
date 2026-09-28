@@ -31,6 +31,13 @@ export async function POST(request: Request) {
     }
     const db = getServiceClient()
 
+    // A cashier with an assigned branch can only ever sell under that
+    // branch — enforced here too, not just by hiding the picker in the UI,
+    // since a request can be sent directly without going through the page.
+    if (session.branchId) {
+      orderData.branch_id = session.branchId
+    }
+
     if (!Array.isArray(payments) || payments.length === 0) {
       return NextResponse.json({ error: 'No payment recorded for this sale.' }, { status: 400 })
     }

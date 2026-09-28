@@ -218,10 +218,14 @@ interface POSClientProps {
   products: Product[]
   cashierName: string
   branchId: string
+  // True when the signed-in cashier has a fixed branch — the selector locks
+  // to it so a sale can never be rung up under the wrong store. Only staff
+  // with no assigned branch (e.g. a manager covering both) get to choose.
+  branchLocked?: boolean
   onLogout?: () => void
 }
 
-export function POSClient({ products, cashierName, branchId: defaultBranch, onLogout }: POSClientProps) {
+export function POSClient({ products, cashierName, branchId: defaultBranch, branchLocked, onLogout }: POSClientProps) {
 
   const [screen, setScreen] = useState<Screen>('pos')
   const [mobileTab, setMobileTab] = useState<'products' | 'cart'>('products')
@@ -482,13 +486,21 @@ export function POSClient({ products, cashierName, branchId: defaultBranch, onLo
                 placeholder="Search…"
                 style={{ ...inputBase, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', color: 'white', paddingLeft: '29px', width: '100%', fontSize: '13px' }} />
             </div>
-            {/* Branch selector */}
+            {/* Branch — locked to the cashier's assigned store; only an
+                unassigned staff member (e.g. a manager covering both) can switch */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
               <MapPin size={11} color="#E8B4A0" />
-              <select value={activeBranch} onChange={(e) => setActiveBranch(e.target.value)}
-                style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'white', fontFamily: "'Jost', sans-serif", fontSize: '11px', fontWeight: 300, padding: '4px 6px', borderRadius: '4px', cursor: 'pointer', outline: 'none', maxWidth: '110px' }}>
-                {BRANCHES.map((b) => <option key={b.id} value={b.id} style={{ background: '#2C2420' }}>{b.label}</option>)}
-              </select>
+              {branchLocked ? (
+                <span title="This till is locked to your assigned branch"
+                  style={{ color: 'white', fontFamily: "'Jost', sans-serif", fontSize: '11px', fontWeight: 300, padding: '4px 6px', maxWidth: '110px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {BRANCHES.find((b) => b.id === activeBranch)?.label ?? activeBranch}
+                </span>
+              ) : (
+                <select value={activeBranch} onChange={(e) => setActiveBranch(e.target.value)}
+                  style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'white', fontFamily: "'Jost', sans-serif", fontSize: '11px', fontWeight: 300, padding: '4px 6px', borderRadius: '4px', cursor: 'pointer', outline: 'none', maxWidth: '110px' }}>
+                  {BRANCHES.map((b) => <option key={b.id} value={b.id} style={{ background: '#2C2420' }}>{b.label}</option>)}
+                </select>
+              )}
             </div>
             {/* Clock - hidden on mobile */}
             <div className="hidden sm:flex" style={{ alignItems: 'center', gap: '4px', flexShrink: 0 }}>

@@ -52,6 +52,7 @@ export async function POST(request: Request) {
         network: provider,
         phone_last4: localPhone.slice(-4),
         paystack_status: result.data?.status ?? 'error',
+        paystack_message: result.data?.display_text ?? result.message ?? null,
       },
     })
 
@@ -63,6 +64,7 @@ export async function POST(request: Request) {
       reference: result.data.reference ?? reference,
       status: result.data.status,
       displayText: result.data.display_text ?? result.data.message ?? null,
+      testMode: (process.env.PAYSTACK_SECRET_KEY ?? '').startsWith('sk_test_'),
     })
   } catch (err: any) {
     console.error('[POS momo charge]', err)

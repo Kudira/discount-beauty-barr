@@ -9,7 +9,7 @@ type Stage = 'sending' | 'waiting' | 'otp' | 'paid' | 'failed'
 
 const POLL_MS = 4000
 const TIMEOUT_MS = 185_000 // networks cancel unapproved prompts after ~180s
-const DONE_FAILED = ['failed', 'abandoned', 'reversed']
+const DONE_FAILED = ['failed', 'reversed'] // 'abandoned' = not approved yet; the timeout handles it
 
 interface Props {
   amount: number
@@ -26,6 +26,7 @@ export function POSMomoModal({ amount, phone, provider, branchId, onPaid, onClos
   const [message, setMessage] = useState('')
   const [otp, setOtp] = useState('')
   const [busy, setBusy] = useState(false)
+  const [testMode, setTestMode] = useState(false)
   const startedAt = useRef(0)
   const startedCharge = useRef(false)
   const onPaidRef = useRef(onPaid)
@@ -53,6 +54,7 @@ export function POSMomoModal({ amount, phone, provider, branchId, onPaid, onClos
       const json = await res.json().catch(() => ({}))
       if (!res.ok) { fail(json.error ?? 'Could not send the payment prompt.'); return }
       setReference(json.reference)
+      setTestMode(Boolean(json.testMode))
       handleChargeResult(json.status, json.displayText)
     } catch {
       fail('No connection. Check the internet and try again.')
@@ -141,6 +143,12 @@ export function POSMomoModal({ amount, phone, provider, branchId, onPaid, onClos
             <p style={{ fontFamily: font, fontWeight: 300, fontSize: '12px', color: '#8C7B74' }}>Amount</p>
             <p style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '34px', color: '#2C2420', lineHeight: 1.1 }}>{formatCurrency(amount)}</p>
           </div>
+
+          {testMode && stage !== 'paid' && (
+            <p style={{ fontFamily: font, fontWeight: 300, fontSize: '11px', color: '#92400E', background: '#FEF3C7', borderRadius: '6px', padding: '8px 10px', lineHeight: 1.5 }}>
+              Test mode: no real prompt is sent to the phone. Use Paystack’s test mobile money number to try this.
+            </p>
+          )}
 
           {(stage === 'sending' || stage === 'waiting') && (
             <div className="flex flex-col items-center gap-3 py-2">

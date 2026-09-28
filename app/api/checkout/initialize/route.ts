@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getServiceClient } from '@/lib/supabase/service'
 import { initializeTransaction } from '@/lib/paystack'
 import { DELIVERY_FEE, FREE_DELIVERY_MINIMUM } from '@/lib/constants'
+import { getSiteOrigin } from '@/lib/site-url'
 
 interface Body {
   items: { variantId: string; quantity: number }[]
@@ -148,7 +149,7 @@ export async function POST(request: Request) {
   }
 
   // ── Start Paystack checkout ───────────────────────────────────────────────
-  const origin = process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin
+  const origin = getSiteOrigin(request)
   try {
     const init = await initializeTransaction({
       email: customer.email.trim(),

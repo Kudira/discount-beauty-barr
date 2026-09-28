@@ -10,9 +10,9 @@ import {
 import { POSProductCard } from '@/components/pos/POSProductCard'
 import { POSVariantModal } from '@/components/pos/POSVariantModal'
 import { POSReceipt, type ReceiptData } from '@/components/pos/POSReceipt'
+import { POSMomoModal } from '@/components/pos/POSMomoModal'
 import { formatCurrency } from '@/lib/utils'
-import { createClient } from '@/lib/supabase/client'
-import { createOrder, createOrderItems, createPayment, logActivity } from '@/lib/actions'
+import { MOMO_PROVIDERS, type MomoProvider } from '@/lib/pos/momo-providers'
 import type { Product } from '@/types'
 import { PRODUCT_CATEGORIES } from '@/lib/constants'
 
@@ -28,7 +28,7 @@ interface CartItem {
   image?: string
 }
 
-type PaymentMethod = 'cash' | 'card' | 'momo_mtn' | 'momo_vodafone' | 'momo_airteltigo'
+type PaymentMethod = 'cash' | 'card' | 'momo'
 type Screen = 'pos' | 'confirm' | 'receipt'
 
 const CATEGORIES = [{ value: 'all', label: 'All' }, ...PRODUCT_CATEGORIES.map((c) => ({ value: c.value as string, label: c.label }))]
@@ -40,10 +40,17 @@ const BRANCHES = [
 const PAYMENT_METHODS: { id: PaymentMethod; label: string; icon: React.ReactNode; confirmText: string }[] = [
   { id: 'cash',            label: 'Cash',          icon: <Banknote size={14} />,   confirmText: 'Confirm you have received the correct cash amount.' },
   { id: 'card',            label: 'Card',          icon: <CreditCard size={14} />,  confirmText: 'Confirm the card payment has been approved on the terminal.' },
-  { id: 'momo_mtn',        label: 'MTN MoMo',      icon: <Smartphone size={14} />,  confirmText: 'Confirm the MTN MoMo payment prompt has been accepted.' },
-  { id: 'momo_vodafone',   label: 'Vodafone Cash', icon: <Smartphone size={14} />,  confirmText: 'Confirm the Vodafone Cash payment has been completed.' },
-  { id: 'momo_airteltigo', label: 'AirtelTigo',    icon: <Smartphone size={14} />,  confirmText: 'Confirm the AirtelTigo Money payment has been completed.' },
+  // Single-method MoMo goes through Paystack (prompt on the customer's phone).
+  // In a split payment, MoMo is confirmed manually on the customer's phone.
+  { id: 'momo',            label: 'Mobile Money',  icon: <Smartphone size={14} />,  confirmText: 'Confirm the mobile money payment shows as successful on the customer’s phone.' },
 ]
+
+function isValidGhanaPhone(input: string) {
+  let d = input.replace(/\D/g, '')
+  if (d.startsWith('233')) d = '0' + d.slice(3)
+  if (d.length === 9) d = '0' + d
+  return /^0\d{9}$/.test(d)
+}
 
 function generateOrderNumber() {
   const d = new Date().toISOString().slice(2, 10).replace(/-/g, '')
@@ -215,7 +222,6 @@ interface POSClientProps {
 }
 
 export function POSClient({ products, cashierName, branchId: defaultBranch, onLogout }: POSClientProps) {
-  const supabase = createClient()
 
   const [screen, setScreen] = useState<Screen>('pos')
   const [mobileTab, setMobileTab] = useState<'products' | 'cart'>('products')
@@ -239,6 +245,9 @@ export function POSClient({ products, cashierName, branchId: defaultBranch, onLo
   const [processing, setProcessing] = useState(false)
   const [processError, setProcessError] = useState('')
   const [receipt, setReceipt] = useState<ReceiptData | null>(null)
+  const [momoProvider, setMomoProvider] = useState<MomoProvider>('mtn')
+  const [momoPhone, setMomoPhone] = useState('')
+  const [showMomo, setShowMomo] = useState(false)
 
   // ── Computed ────────────────────────────────────────────────────────────────
   const filtered = useMemo(() => products.filter((p) => {
@@ -266,8 +275,9 @@ export function POSClient({ products, cashierName, branchId: defaultBranch, onLo
     if (cart.length === 0 || total <= 0) return false
     if (splitMode) return splitTotal >= total
     if (paymentMethod === 'cash') return cashAmount === '' || cashPaid >= total
+    if (paymentMethod === 'momo') return isValidGhanaPhone(momoPhone)
     return true
-  }, [cart, total, splitMode, splitTotal, paymentMethod, cashAmount, cashPaid])
+  }, [cart, total, splitMode, splitTotal, paymentMethod, cashAmount, cashPaid, momoPhone])
 
   // ── Cart ────────────────────────────────────────────────────────────────────
   const addToCart = (product: Product, variantId: string, qty: number = 1) => {
@@ -315,24 +325,45 @@ export function POSClient({ products, cashierName, branchId: defaultBranch, onLo
     setCart([]); setCustomerName(''); setNotes('')
     setDiscountValue(''); setShowDiscount(false)
     setCashAmount(''); setPaymentMethod('cash'); setSplitMode(false); setProcessError('')
+    setMomoPhone(''); setMomoProvider('mtn')
   }
 
   // ── Payment ─────────────────────────────────────────────────────────────────
-  const handleChargeClick = () => { if (!canCharge) return; setProcessError(''); setScreen('confirm') }
+  const handleChargeClick = () => {
+    if (!canCharge) return
+    setProcessError('')
+    if (!splitMode && paymentMethod === 'momo') setShowMomo(true)
+    else setScreen('confirm')
+  }
 
-  const handleConfirmed = async () => {
+  // paystackReference is set when a MoMo prompt was approved through Paystack
+  const handleConfirmed = async (paystackReference?: string) => {
     setProcessing(true)
     setProcessError('')
     const orderNumber = generateOrderNumber()
     const timestamp = new Date()
-    const payments = splitMode
+
+    // What's recorded as paid (amounts that make up the total)
+    const apiPayments = splitMode
       ? split.filter((s) => parseFloat(s.amount) > 0).map((s) => ({ method: s.method, amount: parseFloat(s.amount) }))
-      : [{ method: paymentMethod, amount: paymentMethod === 'cash' ? Math.max(cashPaid || total, total) : total }]
+      : [{
+          method: paymentMethod,
+          amount: total,
+          ...(paymentMethod === 'momo' ? { provider: momoProvider, paystackReference } : {}),
+        }]
+
+    // What's printed (cash shows the amount handed over)
+    const receiptPayments = splitMode
+      ? apiPayments
+      : [{
+          method: paymentMethod === 'momo' ? `momo_${momoProvider}` : paymentMethod,
+          amount: paymentMethod === 'cash' ? Math.max(cashPaid || total, total) : total,
+        }]
 
     const validBranch = ['osu', 'east-legon'].includes(activeBranch) ? activeBranch : 'osu'
+    let saveWarning: string | undefined
 
     try {
-      // Use API route with service role — bypasses RLS completely
       const res = await fetch('/api/pos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -352,28 +383,33 @@ export function POSClient({ products, cashierName, branchId: defaultBranch, onLo
             product_name: item.name, variant_name: item.variantName,
             brand: item.brand, sku: item.sku, price: item.price, quantity: item.quantity,
           })),
-          payment: { method: payments[0].method, amount: total },
-          cashierName,
+          payments: apiPayments,
         }),
       })
-
-      if (!res.ok) {
-        const json = await res.json()
-        console.error('[POS] API error:', json.error)
-        // Still show receipt — don't block cashier
+      const json = await res.json().catch(() => ({}))
+      if (res.status === 401) {
+        saveWarning = 'Your PIN session ended, so this sale was NOT saved. Sign in again and tell a manager.'
+      } else if (!res.ok) {
+        saveWarning = `This sale was NOT saved (${json.error ?? 'server error'}). Tell a manager.`
+      } else if (json.partial) {
+        saveWarning = `Sale saved with a problem (${json.warning}). Tell a manager.`
       }
     } catch (err: any) {
       console.error('[POS] Exception:', err?.message ?? err)
+      saveWarning = 'No connection — this sale was NOT saved. Tell a manager.'
     }
 
     setReceipt({
       orderNumber, branchId: validBranch, timestamp,
       items: cart.map((i) => ({ name: i.name, brand: i.brand, variantName: i.variantName, price: i.price, quantity: i.quantity })),
-      subtotal, discount, total, payments,
+      subtotal, discount, total, payments: receiptPayments,
       change: paymentMethod === 'cash' && !splitMode ? change : 0,
       cashierName, customerName: customerName || undefined, notes: notes || undefined,
+      paymentReference: paystackReference,
+      saveWarning,
     })
     setProcessing(false)
+    setShowMomo(false)
     setScreen('receipt')
   }
 
@@ -391,7 +427,17 @@ export function POSClient({ products, cashierName, branchId: defaultBranch, onLo
     <>
       {variantProduct && <POSVariantModal product={variantProduct} onSelect={handleVariantSelect} onClose={() => setVariantProduct(null)} />}
       {qtyPicker && <QtyModal product={qtyPicker.product} variantId={qtyPicker.variantId} onConfirm={(qty) => addToCart(qtyPicker.product, qtyPicker.variantId, qty)} onClose={() => setQtyPicker(null)} />}
-      {screen === 'confirm' && <ConfirmModal total={total} paymentMethod={paymentMethod} splitMode={splitMode} split={split} cashPaid={cashPaid} change={change} customerName={customerName} itemCount={itemCount} onConfirm={handleConfirmed} onCancel={() => { setScreen('pos'); setProcessError('') }} processing={processing} error={processError} />}
+      {showMomo && (
+        <POSMomoModal
+          amount={total}
+          phone={momoPhone}
+          provider={momoProvider}
+          branchId={activeBranch}
+          onPaid={(ref) => handleConfirmed(ref)}
+          onClose={() => setShowMomo(false)}
+        />
+      )}
+      {screen === 'confirm' && <ConfirmModal total={total} paymentMethod={paymentMethod} splitMode={splitMode} split={split} cashPaid={cashPaid} change={change} customerName={customerName} itemCount={itemCount} onConfirm={() => handleConfirmed()} onCancel={() => { setScreen('pos'); setProcessError('') }} processing={processing} error={processError} />}
       {screen === 'receipt' && receipt && <POSReceipt receipt={receipt} onNewSale={handleNewSale} />}
 
       {/* Mobile tab bar — only visible on small screens */}
@@ -643,6 +689,24 @@ export function POSClient({ products, cashierName, branchId: defaultBranch, onLo
                       <SplitSquareHorizontal size={12} /> Split
                     </button>
                   </div>
+                  {paymentMethod === 'momo' && (
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex gap-1">
+                        {MOMO_PROVIDERS.map((p) => (
+                          <button key={p.id} onClick={() => setMomoProvider(p.id)}
+                            style={{ flex: 1, padding: '6px 4px', borderRadius: '6px', cursor: 'pointer', background: momoProvider === p.id ? '#B76E79' : 'white', color: momoProvider === p.id ? 'white' : '#2C2420', border: `1px solid ${momoProvider === p.id ? 'transparent' : '#D4C5B8'}`, fontFamily: "'Jost', sans-serif", fontSize: '11px' }}>
+                            {p.label}
+                          </button>
+                        ))}
+                      </div>
+                      <input type="tel" inputMode="numeric" value={momoPhone} onChange={(e) => setMomoPhone(e.target.value)}
+                        placeholder="Customer's MoMo number, e.g. 0241234567"
+                        style={{ ...inputBase, fontSize: '13px' }} />
+                      {momoPhone && !isValidGhanaPhone(momoPhone) && (
+                        <p style={{ fontFamily: "'Jost', sans-serif", fontSize: '11px', color: '#D97706' }}>Enter a 10-digit number</p>
+                      )}
+                    </div>
+                  )}
                   {paymentMethod === 'cash' && (
                     <div className="flex flex-col gap-1.5">
                       <input type="number" value={cashAmount} onChange={(e) => setCashAmount(e.target.value)}
@@ -693,7 +757,7 @@ export function POSClient({ products, cashierName, branchId: defaultBranch, onLo
               {/* Charge button */}
               <button onClick={handleChargeClick} disabled={!canCharge}
                 style={{ width: '100%', padding: '14px', background: canCharge ? '#B76E79' : '#D4C5B8', color: 'white', border: 'none', borderRadius: '8px', fontFamily: "'Cormorant Garamond', serif", fontStyle: 'italic', fontSize: '18px', letterSpacing: '0.04em', cursor: canCharge ? 'pointer' : 'not-allowed', transition: 'background 0.2s' }}>
-                Charge {formatCurrency(total)}
+                {!splitMode && paymentMethod === 'momo' ? `Send MoMo prompt · ${formatCurrency(total)}` : `Charge ${formatCurrency(total)}`}
               </button>
             </div>
           )}

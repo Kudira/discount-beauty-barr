@@ -1,189 +1,160 @@
 'use client'
 
-import { useState } from 'react'
-import { Delete, LogIn } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
+import { LogIn } from 'lucide-react'
 import { POSClient } from './POSClient'
 import type { Product } from '@/types'
 
-interface StaffMember {
-  id: string
-  full_name: string
+export interface Cashier {
+  name: string
   role: string
-  branch_id: string | null
-  pos_pin: string
+  branchId: string | null
 }
 
 interface POSAuthWrapperProps {
   products: Product[]
-  staff: StaffMember[]
-  currentUserName: string
-  currentUserRole: string
   defaultBranch: string
+  initialCashier: Cashier | null
 }
 
-export function POSAuthWrapper({ products, staff, currentUserName, currentUserRole, defaultBranch }: POSAuthWrapperProps) {
-  const [authenticated, setAuthenticated] = useState(false)
-  const [activeCashier, setActiveCashier] = useState<StaffMember | null>(null)
-  const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null)
+const MAX_PIN = 6
+
+export function POSAuthWrapper({ products, defaultBranch, initialCashier }: POSAuthWrapperProps) {
+  const [cashier, setCashier] = useState<Cashier | null>(initialCashier)
   const [pin, setPin] = useState('')
   const [error, setError] = useState('')
+  const [checking, setChecking] = useState(false)
 
-  const handleDigit = (d: string) => { if (pin.length < 6) setPin((p) => p + d) }
-  const handleDelete = () => setPin((p) => p.slice(0, -1))
+  const handleDigit = useCallback((d: string) => {
+    setError('')
+    setPin((p) => (p.length < MAX_PIN ? p + d : p))
+  }, [])
+  const handleDelete = useCallback(() => setPin((p) => p.slice(0, -1)), [])
 
-  const handleLogin = () => {
-    if (!selectedStaff) { setError('Please select your name first'); return }
-    if (selectedStaff.pos_pin === pin) {
-      setActiveCashier(selectedStaff)
-      setAuthenticated(true)
-      setError('')
-    } else {
-      setError('Incorrect PIN. Please try again.')
+  const handleLogin = useCallback(async () => {
+    if (pin.length < 4 || checking) return
+    setChecking(true)
+    setError('')
+    try {
+      const res = await fetch('/api/pos/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(json.error ?? 'Could not sign in. Try again.')
+        setPin('')
+        return
+      }
+      setCashier({ name: json.name, role: json.role, branchId: json.branchId })
       setPin('')
+    } catch {
+      setError('No connection. Check the internet and try again.')
+      setPin('')
+    } finally {
+      setChecking(false)
     }
-  }
+  }, [pin, checking])
 
-  const handleLogout = () => {
-    setAuthenticated(false)
-    setActiveCashier(null)
-    setSelectedStaff(null)
+  const handleLogout = useCallback(async () => {
+    await fetch('/api/pos/logout', { method: 'POST' }).catch(() => {})
+    setCashier(null)
     setPin('')
     setError('')
-  }
+  }, [])
 
-  if (authenticated && activeCashier) {
+  // Physical keyboard / numpad support on the till
+  useEffect(() => {
+    if (cashier) return
+    const onKey = (e: KeyboardEvent) => {
+      if (/^\d$/.test(e.key)) handleDigit(e.key)
+      else if (e.key === 'Backspace') handleDelete()
+      else if (e.key === 'Enter') handleLogin()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [cashier, handleDigit, handleDelete, handleLogin])
+
+  if (cashier) {
     return (
       <POSClient
         products={products}
-        cashierName={activeCashier.full_name}
-        branchId={activeCashier.branch_id ?? defaultBranch}
+        cashierName={cashier.name}
+        branchId={cashier.branchId ?? defaultBranch}
         onLogout={handleLogout}
       />
     )
   }
 
+  const canSubmit = pin.length >= 4 && !checking
+
   return (
     <div style={{
-      minHeight: '100vh',
-      overflowY: 'auto',
-      background: '#2C2420',
-      display: 'flex',
-      alignItems: 'flex-start',
-      justifyContent: 'center',
-      padding: '24px 16px',
+      minHeight: '100vh', overflowY: 'auto', background: '#2C2420',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px 16px',
     }}>
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: '20px',
-        width: '100%',
-        maxWidth: '360px',
-        paddingBottom: '24px',
-      }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '22px', width: '100%', maxWidth: '340px' }}>
 
-        {/* Logo */}
         <div style={{ textAlign: 'center' }}>
-          <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontWeight: 300, fontSize: '24px', color: 'white', letterSpacing: '0.04em', margin: 0 }}>
+          <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontWeight: 300, fontSize: '26px', color: 'white', letterSpacing: '0.04em', margin: 0 }}>
             Discount Beauty Barr<span style={{ color: '#E8B4A0' }}>.</span>
           </h1>
-          <p style={{ fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginTop: '4px', letterSpacing: '0.15em', textTransform: 'uppercase' }}>
-            Point of Sale
+          <p style={{ fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '13px', color: 'rgba(255,255,255,0.55)', marginTop: '8px' }}>
+            Enter your PIN to start selling
           </p>
         </div>
 
-        {/* Staff selector */}
-        <div style={{ width: '100%' }}>
-          <p style={{ fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '12px', color: 'rgba(255,255,255,0.5)', marginBottom: '8px', textAlign: 'center' }}>
-            Who&apos;s signing in?
-          </p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
-            {staff.length === 0 ? (
-              <div style={{ gridColumn: 'span 2', textAlign: 'center', padding: '16px', background: 'rgba(255,255,255,0.08)', borderRadius: '8px' }}>
-                <p style={{ fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '13px', color: 'rgba(255,255,255,0.5)', margin: 0 }}>
-                  No staff PINs set yet.
-                </p>
-                <p style={{ fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '11px', color: 'rgba(255,255,255,0.3)', marginTop: '4px' }}>
-                  Go to Admin → Team to assign PINs.
-                </p>
-              </div>
-            ) : (
-              staff.map((s) => (
-                <button key={s.id}
-                  onClick={() => { setSelectedStaff(s); setPin(''); setError('') }}
-                  style={{
-                    padding: '10px 8px', borderRadius: '8px', border: 'none', cursor: 'pointer',
-                    background: selectedStaff?.id === s.id ? '#B76E79' : 'rgba(255,255,255,0.1)',
-                    transition: 'background 0.15s', textAlign: 'center',
-                  }}>
-                  <p style={{ fontFamily: "'Jost', sans-serif", fontWeight: selectedStaff?.id === s.id ? 400 : 300, fontSize: '13px', color: 'white', margin: 0 }}>
-                    {s.full_name || 'Unknown'}
-                  </p>
-                  <p style={{ fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginTop: '2px', textTransform: 'capitalize' }}>
-                    {s.role}{s.branch_id ? ` · ${s.branch_id.replace('-', ' ')}` : ''}
-                  </p>
-                </button>
-              ))
-            )}
-          </div>
+        {/* PIN dots */}
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', height: '14px' }} aria-label={`${pin.length} digits entered`}>
+          {Array.from({ length: MAX_PIN }).map((_, i) => (
+            <div key={i} style={{
+              width: '12px', height: '12px', borderRadius: '50%',
+              background: i < pin.length ? '#E8B4A0' : 'rgba(255,255,255,0.15)',
+              transition: 'background 0.15s',
+            }} />
+          ))}
         </div>
 
-        {/* PIN section — only shows after staff selected */}
-        {selectedStaff && (
-          <>
-            {/* PIN dots */}
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-              {[0,1,2,3,4,5].map((i) => (
-                <div key={i} style={{
-                  width: '12px', height: '12px', borderRadius: '50%',
-                  background: i < pin.length ? '#E8B4A0' : 'rgba(255,255,255,0.15)',
-                  transition: 'background 0.15s',
-                }} />
-              ))}
-            </div>
+        <p role="alert" style={{ fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '13px', color: '#FCA5A5', textAlign: 'center', margin: 0, minHeight: '18px' }}>
+          {error}
+        </p>
 
-            {error && (
-              <p style={{ fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '13px', color: '#FCA5A5', textAlign: 'center', margin: 0 }}>
-                {error}
-              </p>
-            )}
+        {/* Numpad */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', width: '100%' }}>
+          {['1','2','3','4','5','6','7','8','9','','0','⌫'].map((d, i) => {
+            if (d === '') return <div key={i} />
+            const isDelete = d === '⌫'
+            return (
+              <button key={i} type="button" aria-label={isDelete ? 'Delete digit' : d}
+                onClick={() => (isDelete ? handleDelete() : handleDigit(d))}
+                disabled={checking}
+                style={{
+                  height: '62px', borderRadius: '8px', border: 'none', cursor: 'pointer',
+                  background: 'rgba(255,255,255,0.1)', color: 'white',
+                  fontFamily: isDelete ? 'system-ui' : "'Cormorant Garamond', serif",
+                  fontSize: isDelete ? '18px' : '26px', fontWeight: 300,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+                onPointerDown={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.22)')}
+                onPointerUp={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.1)')}
+                onPointerLeave={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.1)')}>
+                {d}
+              </button>
+            )
+          })}
+        </div>
 
-            {/* Numpad */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', width: '100%' }}>
-              {['1','2','3','4','5','6','7','8','9','','0','⌫'].map((d, i) => {
-                if (d === '') return <div key={i} />
-                return (
-                  <button key={i}
-                    onClick={() => d === '⌫' ? handleDelete() : handleDigit(d)}
-                    style={{
-                      height: '58px', borderRadius: '8px', border: 'none', cursor: 'pointer',
-                      background: 'rgba(255,255,255,0.1)', color: 'white',
-                      fontFamily: d === '⌫' ? 'system-ui' : "'Cormorant Garamond', serif",
-                      fontSize: d === '⌫' ? '18px' : '24px', fontWeight: 300,
-                      transition: 'background 0.1s', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}
-                    onMouseDown={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.22)')}
-                    onMouseUp={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.1)')}>
-                    {d}
-                  </button>
-                )
-              })}
-            </div>
-
-            {/* Login button */}
-            <button onClick={handleLogin} disabled={pin.length < 4}
-              style={{
-                width: '100%', padding: '14px', borderRadius: '8px', border: 'none',
-                background: pin.length >= 4 ? '#B76E79' : 'rgba(255,255,255,0.1)',
-                color: 'white', cursor: pin.length >= 4 ? 'pointer' : 'not-allowed',
-                fontFamily: "'Cormorant Garamond', serif", fontStyle: 'italic', fontSize: '17px',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                transition: 'background 0.2s',
-              }}>
-              <LogIn size={16} /> Sign In to POS
-            </button>
-          </>
-        )}
+        <button type="button" onClick={handleLogin} disabled={!canSubmit}
+          style={{
+            width: '100%', padding: '15px', borderRadius: '8px', border: 'none',
+            background: canSubmit ? '#B76E79' : 'rgba(255,255,255,0.1)',
+            color: 'white', cursor: canSubmit ? 'pointer' : 'not-allowed',
+            fontFamily: "'Cormorant Garamond', serif", fontStyle: 'italic', fontSize: '18px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+          }}>
+          <LogIn size={16} /> {checking ? 'Checking…' : 'Sign in'}
+        </button>
       </div>
     </div>
   )

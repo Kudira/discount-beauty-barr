@@ -78,13 +78,16 @@ export function UsersClient({ users }: { users: any[] }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, pos_pin: pinValue }),
       })
-      if (!res.ok) throw new Error('Failed to save PIN')
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        throw new Error(json.error ?? 'Failed to save PIN')
+      }
       setLocalUsers((p) => p.map((u) => u.id === userId ? { ...u, pos_pin: pinValue } : u))
       setPinMsg('✓ PIN saved')
       logActivity({ action: 'user.pin_updated', entity_type: 'user', entity_id: userId, details: {} }).catch(() => {})
       setTimeout(() => { setPinEditId(null); setPinMsg(''); setPinValue('') }, 1500)
-    } catch {
-      setPinMsg('Failed to save PIN')
+    } catch (err: any) {
+      setPinMsg(err?.message ?? 'Failed to save PIN')
     } finally {
       setSavingPin(false)
     }

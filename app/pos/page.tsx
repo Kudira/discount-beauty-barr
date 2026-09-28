@@ -1,49 +1,36 @@
-import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { POSAuthWrapper } from './POSAuthWrapper'
 import { getProducts } from '@/lib/getProducts'
+import { getPosSession } from '@/lib/pos/session'
 
 export const dynamic = 'force-dynamic'
 
 export default async function POSPage() {
   const supabase = await createClient()
-  const admin = createAdminClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  let cashierName = 'Cashier'
-  let defaultBranch = 'osu'
-  let userRole = 'cashier'
-
+  // Branch of the account the till is signed in with — used when a cashier
+  // has no branch assigned.
+  let terminalBranch = 'osu'
   if (user) {
-    const { data: profile } = await admin
+    const { data: profile } = await createAdminClient()
       .from('profiles')
-      .select('full_name, role, branch_id, pos_pin')
+      .select('branch_id')
       .eq('id', user.id)
       .maybeSingle()
-
-    if (profile) {
-      cashierName = (profile as any).full_name ?? 'Cashier'
-      defaultBranch = (profile as any).branch_id ?? 'osu'
-      userRole = (profile as any).role ?? 'cashier'
-    }
+    terminalBranch = (profile as any)?.branch_id ?? 'osu'
   }
 
-  // Load all POS staff (cashiers, managers, admins) for PIN login
-  const { data: staff } = await admin
-    .from('profiles')
-    .select('id, full_name, role, branch_id, pos_pin')
-    .in('role', ['super_admin', 'admin', 'manager', 'cashier'])
-    .not('pos_pin', 'is', null)
-
+  // If a cashier is already signed in on this till (e.g. page refresh), resume.
+  // No staff list or PINs are ever sent to the browser.
+  const session = await getPosSession()
   const products = await getProducts()
 
   return (
     <POSAuthWrapper
       products={products}
-      staff={(staff ?? []) as any[]}
-      currentUserName={cashierName}
-      currentUserRole={userRole}
-      defaultBranch={defaultBranch}
+      defaultBranch={terminalBranch}
+      initialCashier={session ? { name: session.name, role: session.role, branchId: session.branchId } : null}
     />
   )
 }

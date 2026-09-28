@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, MapPin, Package, Tag, AlertCircle } from 'lucide-react'
 import { useCart } from '@/context/CartContext'
@@ -11,8 +10,6 @@ import { EmptyCart } from '@/components/cart/EmptyCart'
 import { BRANCHES } from '@/lib/constants'
 import { formatCurrency } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
-import { createOrder, createOrderItems, logActivity } from '@/lib/actions'
-import { sendEmail } from '@/lib/email/sendEmail'
 
 type Fulfillment = 'delivery' | 'pickup'
 
@@ -35,9 +32,8 @@ const labelStyle: React.CSSProperties = {
 }
 
 export function CheckoutClient() {
-  const { items, subtotal, deliveryFee, total, clearCart } = useCart()
+  const { items, subtotal, deliveryFee: cartDeliveryFee } = useCart()
   const { user, profile } = useAuth()
-  const router = useRouter()
   const supabase = createClient()
 
   const [placing, setPlacing] = useState(false)
@@ -63,7 +59,9 @@ export function CheckoutClient() {
     }
   }, [user, profile])
 
-  const finalTotal = Math.max(0, total - (promoApplied?.discount ?? 0))
+  // Pickup is free; the server recalculates all of this before charging.
+  const deliveryFee = form.fulfillment === 'pickup' ? 0 : cartDeliveryFee
+  const finalTotal = Math.max(0, subtotal + deliveryFee - (promoApplied?.discount ?? 0))
 
   if (items.length === 0) return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20"><EmptyCart /></div>
@@ -99,74 +97,28 @@ export function CheckoutClient() {
     setError(''); setPlacing(true)
 
     try {
-      const customerName = `${form.firstName} ${form.lastName}`.trim()
-
-      // Use server action — bypasses RLS with service role key
-      const order = await createOrder({
-        customer_id: user?.id ?? null,
-        branch_id: form.fulfillment === 'pickup' ? form.branch : null,
-        status: 'pending',
-        fulfillment: form.fulfillment,
-        customer_name: customerName,
-        customer_email: form.email,
-        customer_phone: form.phone || null,
-        delivery_address: form.fulfillment === 'delivery' ? form.address : null,
-        delivery_city: form.fulfillment === 'delivery' ? form.city : null,
-        notes: form.notes || null,
-        subtotal,
-        delivery_fee: deliveryFee,
-        discount: promoApplied?.discount ?? 0,
-        total: finalTotal,
+      // The server prices the order from the database, saves it as pending,
+      // and returns a Paystack payment page. The cart is cleared only after
+      // payment is confirmed (on /checkout/verify).
+      const res = await fetch('/api/checkout/initialize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: items.map((i) => ({ variantId: i.variantId, quantity: i.quantity })),
+          customer: { firstName: form.firstName, lastName: form.lastName, email: form.email, phone: form.phone },
+          fulfillment: form.fulfillment,
+          branch: form.branch,
+          address: form.address,
+          city: form.city,
+          notes: form.notes,
+          promoCode: promoApplied?.code ?? '',
+        }),
       })
-
-      await createOrderItems(items.map((item) => ({
-        order_id: order.id,
-        variant_id: item.variantId,
-        product_name: item.name,
-        variant_name: item.variantName,
-        brand: item.brand,
-        sku: item.sku,
-        price: item.price,
-        quantity: item.quantity,
-      })))
-
-      // Log activity (non-critical, non-blocking)
-      logActivity({
-        user_id: user?.id ?? null,
-        user_email: form.email,
-        action: 'order.created',
-        entity_type: 'order',
-        entity_id: order.id,
-        details: { order_number: order.order_number, total: finalTotal, source: 'online' },
-      }).catch(() => {})
-
-      // Clear cart and navigate FIRST — email is fire-and-forget after this
-      clearCart()
-      router.push(`/checkout/success?order=${order.order_number}`)
-
-      // Send confirmation email after navigation (non-blocking, isolated)
-      const emailTo = form.email
-      const emailFirstName = form.firstName
-      const emailOrderNumber = order.order_number
-      const emailOrderId = order.id
-      setTimeout(() => {
-        import('@/lib/email/templates').then(({ orderConfirmationTemplate }) => {
-          const { subject, html } = orderConfirmationTemplate({
-            customerName: emailFirstName,
-            orderNumber: emailOrderNumber,
-            items: items.map((i) => ({ name: i.name, variantName: i.variantName, quantity: i.quantity, price: i.price })),
-            subtotal,
-            deliveryFee,
-            discount: promoApplied?.discount ?? 0,
-            total: finalTotal,
-            fulfillment: form.fulfillment,
-            deliveryAddress: form.fulfillment === 'delivery' ? form.address : undefined,
-            branchName: form.fulfillment === 'pickup' ? BRANCHES.find((b) => b.id === form.branch)?.name : undefined,
-          })
-          sendEmail({ to: emailTo, subject, html, orderId: emailOrderId, template: 'order_confirmation' }).catch(() => {})
-        }).catch(() => {})
-      }, 500)
-
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || !json.authorizationUrl) {
+        throw new Error(json.error ?? 'Could not start payment. Please try again.')
+      }
+      window.location.href = json.authorizationUrl
     } catch (err: any) {
       setError(err.message ?? 'Something went wrong. Please try again.')
       setPlacing(false)
@@ -217,7 +169,7 @@ export function CheckoutClient() {
             <h2 style={{ fontFamily: "'Cormorant Garamond', serif", fontWeight: 400, fontSize: '22px', color: '#2C2420' }}>Delivery or Pickup?</h2>
             <div className="grid grid-cols-2 gap-3">
               {[
-                { value: 'delivery', label: 'Home Delivery', icon: <Package size={18} />, sub: deliveryFee === 0 ? 'Free' : formatCurrency(30) },
+                { value: 'delivery', label: 'Home Delivery', icon: <Package size={18} />, sub: cartDeliveryFee === 0 ? 'Free' : formatCurrency(cartDeliveryFee) },
                 { value: 'pickup', label: 'Pick Up In Store', icon: <MapPin size={18} />, sub: 'Free' },
               ].map((opt) => (
                 <button type="button" key={opt.value}
@@ -304,8 +256,11 @@ export function CheckoutClient() {
 
           <button type="submit" disabled={placing}
             style={{ padding: '16px', background: placing ? '#8C7B74' : '#2C2420', color: 'white', fontFamily: "'Cormorant Garamond', serif", fontStyle: 'italic', fontSize: '18px', letterSpacing: '0.06em', border: 'none', cursor: placing ? 'not-allowed' : 'pointer', borderRadius: '2px', transition: 'background 0.2s' }}>
-            {placing ? 'Placing Order…' : `Place Order · ${formatCurrency(finalTotal)}`}
+            {placing ? 'Opening secure payment…' : `Pay ${formatCurrency(finalTotal)}`}
           </button>
+          <p style={{ fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '12px', color: '#8C7B74', textAlign: 'center', marginTop: '-20px' }}>
+            You’ll pay by card or mobile money on Paystack’s secure page.
+          </p>
         </form>
 
         <div className="lg:col-span-1">

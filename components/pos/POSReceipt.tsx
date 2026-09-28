@@ -1,7 +1,7 @@
 'use client'
 
-import { useRef } from 'react'
-import { Check, Printer, RotateCcw, Download } from 'lucide-react'
+import { useEffect, useRef } from 'react'
+import { AlertTriangle, Check, Printer, RotateCcw, Download } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 
 export interface ReceiptData {
@@ -17,6 +17,8 @@ export interface ReceiptData {
   timestamp: Date
   customerName?: string
   notes?: string
+  paymentReference?: string // Paystack reference for MoMo sales
+  saveWarning?: string      // set when the sale didn't save cleanly
 }
 
 const BRANCH_NAMES: Record<string, string> = {
@@ -25,107 +27,133 @@ const BRANCH_NAMES: Record<string, string> = {
 }
 
 const METHOD_LABELS: Record<string, string> = {
-  cash: 'Cash', card: 'Card',
-  momo_mtn: 'MTN MoMo', momo_vodafone: 'Vodafone Cash', momo_airteltigo: 'AirtelTigo',
+  cash: 'Cash', card: 'Card', momo: 'Mobile Money',
+  momo_mtn: 'MTN MoMo', momo_vod: 'Telecel Cash', momo_atl: 'AT Money',
+  // older sales
+  momo_vodafone: 'Vodafone Cash', momo_airteltigo: 'AirtelTigo',
+}
+
+// The POS58 driver prints 48mm wide. Everything is sized to that.
+const PRINT_WIDTH_MM = 48
+
+function esc(value: string): string {
+  return value.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!))
+}
+
+function money(n: number): string {
+  return `GHS ${n.toFixed(2)}`
 }
 
 function buildReceiptHTML(receipt: ReceiptData): string {
+  const row = (left: string, right: string, cls = '') =>
+    `<div class="row ${cls}"><span>${left}</span><span class="amt">${right}</span></div>`
+
   return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Receipt ${receipt.orderNumber}</title>
+  <title>Receipt ${esc(receipt.orderNumber)}</title>
   <style>
+    @page { size: ${PRINT_WIDTH_MM}mm auto; margin: 0; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Courier New', monospace; font-size: 12px; padding: 12px; width: 80mm; color: #000; }
+    html, body { width: ${PRINT_WIDTH_MM}mm; }
+    body { font-family: 'Courier New', Courier, monospace; font-size: 11px; line-height: 1.35; color: #000; padding: 1mm 1mm 4mm; }
     .center { text-align: center; }
     .bold { font-weight: bold; }
-    .row { display: flex; justify-content: space-between; margin: 3px 0; }
-    .dashed { border-top: 1px dashed #000; margin: 8px 0; }
-    .total-row { font-size: 14px; font-weight: bold; }
-    .header { text-align: center; margin-bottom: 8px; }
-    .footer { text-align: center; margin-top: 8px; font-size: 10px; }
-    @media print {
-      body { width: 100%; }
-      @page { margin: 0; size: 80mm auto; }
-    }
+    .store { font-size: 13px; font-weight: bold; }
+    .small { font-size: 9.5px; }
+    .rule { border-top: 1px dashed #000; margin: 2mm 0; }
+    .row { display: flex; justify-content: space-between; gap: 2mm; }
+    .row span:first-child { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+    .amt { white-space: nowrap; }
+    .item { margin-bottom: 1.2mm; }
+    .qty { padding-left: 2mm; }
+    .total { font-size: 13px; font-weight: bold; }
   </style>
 </head>
 <body>
-  <div class="header">
-    <div class="bold" style="font-size:15px;">Discount Beauty Barr</div>
-    <div style="font-size:10px;">${BRANCH_NAMES[receipt.branchId] ?? receipt.branchId}</div>
-    <div style="font-size:10px;">${receipt.timestamp.toLocaleString('en-GH')}</div>
-  </div>
-  <div class="dashed"></div>
-  <div>Receipt: <strong>${receipt.orderNumber}</strong></div>
-  <div>Cashier: ${receipt.cashierName}</div>
-  ${receipt.customerName ? `<div>Customer: ${receipt.customerName}</div>` : ''}
-  <div class="dashed"></div>
+  <div class="center store">DISCOUNT BEAUTY BARR</div>
+  <div class="center small">${esc(BRANCH_NAMES[receipt.branchId] ?? receipt.branchId)}</div>
+  <div class="rule"></div>
+  <div>Receipt: ${esc(receipt.orderNumber)}</div>
+  <div>${esc(receipt.timestamp.toLocaleString('en-GH', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }))}</div>
+  <div>Cashier: ${esc(receipt.cashierName)}</div>
+  ${receipt.customerName ? `<div>Customer: ${esc(receipt.customerName)}</div>` : ''}
+  <div class="rule"></div>
   ${receipt.items.map((item) => `
-    <div class="row">
-      <span style="flex:1;margin-right:8px;">${item.name} (${item.variantName}) ×${item.quantity}</span>
-      <span>${formatCurrency(item.price * item.quantity)}</span>
-    </div>
-  `).join('')}
-  <div class="dashed"></div>
-  <div class="row"><span>Subtotal</span><span>${formatCurrency(receipt.subtotal)}</span></div>
-  ${receipt.discount > 0 ? `<div class="row"><span>Discount</span><span>-${formatCurrency(receipt.discount)}</span></div>` : ''}
-  <div class="row total-row"><span>TOTAL</span><span>${formatCurrency(receipt.total)}</span></div>
-  <div class="dashed"></div>
-  ${receipt.payments.map((p) => `<div class="row"><span>${METHOD_LABELS[p.method] ?? p.method}</span><span>${formatCurrency(p.amount)}</span></div>`).join('')}
-  ${receipt.change > 0 ? `<div class="row"><span>Change</span><span>${formatCurrency(receipt.change)}</span></div>` : ''}
-  <div class="dashed"></div>
-  <div class="footer">
-    <div>Thank you for shopping with us!</div>
-    <div>Returns accepted within 7 days</div>
-    <div>hello@discountbeautybarr.com</div>
-  </div>
+    <div class="item">
+      <div>${esc(item.name)}${item.variantName ? ` (${esc(item.variantName)})` : ''}</div>
+      ${row(`<span class="qty">${item.quantity} x ${money(item.price)}</span>`, money(item.price * item.quantity))}
+    </div>`).join('')}
+  <div class="rule"></div>
+  ${row('Subtotal', money(receipt.subtotal))}
+  ${receipt.discount > 0 ? row('Discount', `-${money(receipt.discount)}`) : ''}
+  ${row('TOTAL', money(receipt.total), 'total')}
+  <div class="rule"></div>
+  ${receipt.payments.map((p) => row(esc(METHOD_LABELS[p.method] ?? p.method), money(p.amount))).join('')}
+  ${receipt.change > 0 ? row('Change', money(receipt.change)) : ''}
+  ${receipt.paymentReference ? `<div class="small">Ref: ${esc(receipt.paymentReference)}</div>` : ''}
+  <div class="rule"></div>
+  <div class="center small">Thank you for shopping with us!</div>
+  <div class="center small">Returns accepted within 7 days</div>
+  <div class="center small">hello@discountbeautybarr.com</div>
 </body>
 </html>`
 }
 
+/**
+ * Prints through a hidden iframe — no popup window, and only the receipt is
+ * printed. With Chrome started using --kiosk-printing this prints silently.
+ */
+function printReceiptHTML(html: string) {
+  const iframe = document.createElement('iframe')
+  iframe.setAttribute('aria-hidden', 'true')
+  Object.assign(iframe.style, { position: 'fixed', right: '0', bottom: '0', width: '0', height: '0', border: '0' })
+  document.body.appendChild(iframe)
+  const win = iframe.contentWindow
+  if (!win) { iframe.remove(); return }
+  win.document.open()
+  win.document.write(html)
+  win.document.close()
+  setTimeout(() => {
+    win.focus()
+    win.print()
+    setTimeout(() => iframe.remove(), 2000)
+  }, 250)
+}
+
 export function POSReceipt({ receipt, onNewSale }: { receipt: ReceiptData; onNewSale: () => void }) {
 
-  const handlePrint = () => {
-    const html = buildReceiptHTML(receipt)
-    const win = window.open('', '_blank', 'width=420,height=700,scrollbars=yes')
-    if (!win) {
-      alert('Please allow popups for this site to print receipts.')
-      return
-    }
-    win.document.write(html)
-    win.document.close()
-    win.focus()
-    setTimeout(() => { win.print() }, 400)
-  }
+  const handlePrint = () => printReceiptHTML(buildReceiptHTML(receipt))
+
+  // Print automatically once, as soon as the sale completes.
+  const autoPrinted = useRef(false)
+  useEffect(() => {
+    if (autoPrinted.current) return
+    autoPrinted.current = true
+    printReceiptHTML(buildReceiptHTML(receipt))
+  }, [receipt])
 
   const handleSavePDF = () => {
-    const html = buildReceiptHTML(receipt)
-    // Use a data URI — works without popups
-    const blob = new Blob([html], { type: 'text/html' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `receipt-${receipt.orderNumber}.html`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-    // Also open print dialog so user can save as PDF
-    setTimeout(() => {
-      const win = window.open(url, '_blank', 'width=420,height=700')
-      if (win) {
-        win.focus()
-        setTimeout(() => { win.print() }, 400)
-      }
-    }, 100)
+    // Opens the browser print dialog — choose "Save as PDF" as the printer.
+    const url = URL.createObjectURL(new Blob([buildReceiptHTML(receipt)], { type: 'text/html' }))
+    const win = window.open(url, '_blank', 'width=420,height=700')
+    if (!win) { alert('Please allow popups for this site to save receipts.'); return }
+    win.addEventListener('load', () => { win.focus(); win.print() })
+    setTimeout(() => URL.revokeObjectURL(url), 60_000)
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: 'rgba(44,36,32,0.7)', overflowY: 'auto' }}>
       <div className="flex flex-col gap-3 w-full max-w-sm my-auto">
+
+        {receipt.saveWarning && (
+          <div className="flex items-start gap-2 p-3" style={{ background: '#FEF2F2', borderRadius: '8px', border: '1px solid #FECACA' }}>
+            <AlertTriangle size={16} color="#DC2626" style={{ flexShrink: 0, marginTop: '1px' }} />
+            <p style={{ fontFamily: "'Jost', sans-serif", fontSize: '13px', color: '#991B1B', lineHeight: 1.5 }}>{receipt.saveWarning}</p>
+          </div>
+        )}
 
         {/* Success badge */}
         <div className="flex flex-col items-center gap-2 pt-1">

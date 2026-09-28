@@ -28,6 +28,26 @@ export async function middleware(request: NextRequest) {
 
   const path = request.nextUrl.pathname
 
+  // ── Protected APIs: /api/admin/* and /api/pos/* ───────────
+  // Page routes redirect; API routes answer with JSON instead.
+  if (path.startsWith('/api/admin') || path.startsWith('/api/pos')) {
+    if (!user) {
+      return NextResponse.json({ error: 'Not signed in' }, { status: 401 })
+    }
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+    const allowed = path.startsWith('/api/admin')
+      ? ['super_admin', 'admin', 'manager']
+      : ['super_admin', 'admin', 'manager', 'cashier']
+    if (!profile || !allowed.includes(profile.role)) {
+      return NextResponse.json({ error: 'Not allowed' }, { status: 403 })
+    }
+    return supabaseResponse
+  }
+
   // ── Protected: /admin/* — admin and manager only ──────────
   if (path.startsWith('/admin')) {
     if (!user) {
@@ -78,5 +98,7 @@ export const config = {
     '/admin/:path*',
     '/pos/:path*',
     '/account/:path*',
+    '/api/admin/:path*',
+    '/api/pos/:path*',
   ],
 }

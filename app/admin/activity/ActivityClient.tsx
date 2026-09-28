@@ -12,7 +12,17 @@ const ACTION_LABELS: Record<string, { label: string; color: string; bg: string }
   'inventory.adjusted':   { label: 'Stock Adjusted',     color: '#0891B2', bg: '#ECFEFF' },
   'content.updated':      { label: 'Content Updated',    color: '#B76E79', bg: '#FDF5F6' },
   'pos.sale':             { label: 'POS Sale',           color: '#065F46', bg: '#D1FAE5' },
+  'pos.login':            { label: 'POS Sign-in',        color: '#1D4ED8', bg: '#EFF6FF' },
+  'pos.logout':           { label: 'POS Sign-out',       color: '#475569', bg: '#F1F5F9' },
+  'pos.login_failed':     { label: 'Wrong PIN',          color: '#DC2626', bg: '#FEF2F2' },
+  'pos.momo_requested':   { label: 'MoMo Prompt Sent',   color: '#B45309', bg: '#FFFBEB' },
+  'payment.success':      { label: 'Online Payment',     color: '#16A34A', bg: '#F0FDF4' },
+  'payment.amount_mismatch': { label: 'Payment Mismatch', color: '#DC2626', bg: '#FEF2F2' },
+  'user.pin_updated':     { label: 'PIN Changed',        color: '#D97706', bg: '#FEF3C7' },
 }
+
+// Internal ids that aren't useful to read in the log
+const HIDDEN_DETAILS = new Set(['terminal_user_id'])
 
 export function ActivityClient({ logs }: { logs: any[] }) {
   const [search, setSearch] = useState('')
@@ -21,6 +31,7 @@ export function ActivityClient({ logs }: { logs: any[] }) {
   const filtered = useMemo(() => logs.filter((log) => {
     const matchSearch = !search ||
       log.user_email?.toLowerCase().includes(search.toLowerCase()) ||
+      String(log.details?.staff ?? '').toLowerCase().includes(search.toLowerCase()) ||
       log.action?.toLowerCase().includes(search.toLowerCase()) ||
       log.entity_id?.toLowerCase().includes(search.toLowerCase())
     const matchAction = actionFilter === 'all' || log.action === actionFilter
@@ -50,7 +61,7 @@ export function ActivityClient({ logs }: { logs: any[] }) {
         <div className="relative flex-1">
           <Search size={14} color="#B76E79" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
           <input value={search} onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by user, action, or ID…"
+            placeholder="Search by staff, email, action, or ID…"
             style={{ ...inputStyle, width: '100%', paddingLeft: '34px' }} />
         </div>
         <select value={actionFilter} onChange={(e) => setActionFilter(e.target.value)}
@@ -94,7 +105,7 @@ export function ActivityClient({ logs }: { logs: any[] }) {
                     </td>
                     <td style={{ padding: '10px 14px' }}>
                       <p style={{ fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '12px', color: '#2C2420' }}>
-                        {log.user_email ?? 'System'}
+                        {log.details?.staff ?? log.user_email ?? 'System'}
                       </p>
                       {log.user_role && (
                         <p style={{ fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '10px', color: '#C4B8B2', textTransform: 'capitalize' }}>
@@ -110,11 +121,11 @@ export function ActivityClient({ logs }: { logs: any[] }) {
                     <td style={{ padding: '10px 14px', maxWidth: '260px' }}>
                       {log.details && Object.keys(log.details).length > 0 && (
                         <p style={{ fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '11px', color: '#8C7B74', lineHeight: 1.5 }} className="truncate">
-                          {Object.entries(log.details).map(([k, v]) => `${k}: ${v}`).join(' · ')}
+                          {Object.entries(log.details).filter(([k]) => !HIDDEN_DETAILS.has(k) && k !== 'staff').map(([k, v]) => `${k}: ${v}`).join(' · ')}
                         </p>
                       )}
                       {log.entity_id && (
-                        <p style={{ fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '10px', color: '#C4B8B2', marginTop: '2px', fontFamily: 'monospace' }}>
+                        <p style={{ fontWeight: 300, fontSize: '10px', color: '#C4B8B2', marginTop: '2px', fontFamily: 'monospace' }}>
                           {log.entity_id.slice(0, 16)}…
                         </p>
                       )}

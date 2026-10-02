@@ -63,6 +63,46 @@ export function UsersClient({ users }: { users: any[] }) {
     }
   }
 
+  // ── Add admin / manager / read-only (real login) ────────────────────────
+  const [showAddAdmin, setShowAddAdmin] = useState(false)
+  const [adminName, setAdminName] = useState('')
+  const [adminEmail, setAdminEmail] = useState('')
+  const [adminPassword, setAdminPassword] = useState('')
+  const [adminRole, setAdminRole] = useState('admin')
+  const [addingAdmin, setAddingAdmin] = useState(false)
+  const [adminError, setAdminError] = useState('')
+  const [adminSuccess, setAdminSuccess] = useState('')
+
+  const addAdmin = async () => {
+    if (adminName.trim().length < 2) { setAdminError('Enter their full name.'); return }
+    if (!/^\S+@\S+\.\S+$/.test(adminEmail.trim())) { setAdminError('Enter a valid email address.'); return }
+    if (adminPassword.length < 8) { setAdminError('Temporary password must be at least 8 characters.'); return }
+    setAddingAdmin(true)
+    setAdminError('')
+    setAdminSuccess('')
+    try {
+      const res = await fetch('/api/admin/team', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fullName: adminName.trim(), email: adminEmail.trim(), password: adminPassword, role: adminRole }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) { setAdminError(json.error ?? 'Could not add this person.'); return }
+      setLocalUsers((p) => [json.user, ...p.filter((u) => u.id !== json.user.id)])
+      setAdminSuccess(
+        json.existing
+          ? `${json.user.email} already had an account — their role is now updated. Their existing password still works.`
+          : `Added ${json.user.email}. Share the temporary password with them privately and ask them to change it after first login.`
+      )
+      setAdminName(''); setAdminEmail(''); setAdminPassword(''); setAdminRole('admin')
+      router.refresh()
+    } catch {
+      setAdminError('No connection. Check the internet and try again.')
+    } finally {
+      setAddingAdmin(false)
+    }
+  }
+
   const inputStyle: React.CSSProperties = {
     padding: '9px 12px', background: 'white', border: '1px solid #D4C5B8', borderRadius: '4px',
     fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '13px', color: '#2C2420', outline: 'none',
@@ -193,10 +233,64 @@ export function UsersClient({ users }: { users: any[] }) {
             </div>
           </div>
         )}
+      </div>
 
-        <p style={{ fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '12px', color: '#8C7B74', lineHeight: 1.6, borderTop: '1px solid #E8DDD4', paddingTop: '10px' }}>
-          <strong style={{ color: '#2C2420' }}>To add an admin or manager instead:</strong> ask them to create an account at <code style={{ background: '#F2EDE8', padding: '1px 5px', borderRadius: '3px', fontSize: '12px' }}>/register</code>, then find them here to set their role. Those roles use the dashboard, so they need a real login.
-        </p>
+      {/* Add admin / manager / read-only — real login, created directly */}
+      <div className="p-5 flex flex-col gap-4" style={{ background: '#FAF7F4', border: '1px solid #E8DDD4', borderRadius: '4px' }}>
+        <div className="flex items-center justify-between">
+          <div>
+            <p style={{ fontFamily: "'Cormorant Garamond', serif", fontWeight: 400, fontSize: '18px', color: '#2C2420' }}>Add an Admin or Manager</p>
+            <p style={{ fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '12px', color: '#8C7B74', marginTop: '2px' }}>
+              Creates a dashboard login straight away — no sign-up or confirmation email needed.
+            </p>
+          </div>
+          {!showAddAdmin && (
+            <button onClick={() => { setShowAddAdmin(true); setAdminSuccess('') }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 16px', background: '#2C2420', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontFamily: "'Jost', sans-serif", fontSize: '13px', flexShrink: 0 }}>
+              <UserPlus size={14} /> Add Admin
+            </button>
+          )}
+        </div>
+
+        {adminSuccess && !showAddAdmin && (
+          <p style={{ fontFamily: "'Jost', sans-serif", fontSize: '12px', color: '#065F46', lineHeight: 1.6 }}>{adminSuccess}</p>
+        )}
+
+        {showAddAdmin && (
+          <div className="flex flex-col gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div>
+                <label style={{ fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '11px', color: '#8C7B74', display: 'block', marginBottom: '4px' }}>Full name</label>
+                <input value={adminName} onChange={(e) => setAdminName(e.target.value)} placeholder="Kwame Boateng" style={{ ...inputStyle, width: '100%' }} />
+              </div>
+              <div>
+                <label style={{ fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '11px', color: '#8C7B74', display: 'block', marginBottom: '4px' }}>Email</label>
+                <input type="email" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} placeholder="name@example.com" style={{ ...inputStyle, width: '100%' }} />
+              </div>
+              <div>
+                <label style={{ fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '11px', color: '#8C7B74', display: 'block', marginBottom: '4px' }}>Temporary password (min 8)</label>
+                <input type="text" value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} autoComplete="off" style={{ ...inputStyle, width: '100%' }} />
+              </div>
+              <div>
+                <label style={{ fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '11px', color: '#8C7B74', display: 'block', marginBottom: '4px' }}>Role</label>
+                <select value={adminRole} onChange={(e) => setAdminRole(e.target.value)} style={{ ...inputStyle, width: '100%', cursor: 'pointer' }}>
+                  {ROLES.filter((r) => r.value !== 'cashier').map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+                </select>
+              </div>
+            </div>
+            {adminError && <p style={{ fontFamily: "'Jost', sans-serif", fontSize: '12px', color: '#DC2626' }}>{adminError}</p>}
+            <div className="flex gap-2">
+              <button onClick={addAdmin} disabled={addingAdmin}
+                style={{ padding: '10px 18px', background: addingAdmin ? '#8C7B74' : '#B76E79', color: 'white', border: 'none', borderRadius: '6px', cursor: addingAdmin ? 'wait' : 'pointer', fontFamily: "'Jost', sans-serif", fontSize: '13px' }}>
+                {addingAdmin ? 'Adding…' : 'Add to Team'}
+              </button>
+              <button onClick={() => { setShowAddAdmin(false); setAdminError(''); setAdminName(''); setAdminEmail(''); setAdminPassword('') }}
+                style={{ padding: '10px 18px', background: 'none', border: '1px solid #D4C5B8', borderRadius: '6px', cursor: 'pointer', fontFamily: "'Jost', sans-serif", fontSize: '13px', color: '#8C7B74' }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Users table */}

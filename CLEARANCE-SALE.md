@@ -4,7 +4,7 @@ Standalone page at `/clearance`. It has its own header (no main-site menu or foo
 
 ## Go-live steps
 
-1. **Supabase.** Open the SQL Editor, paste `supabase-clearance-sale.sql`, run it. The last query returns `items_in_sale` (75) and your `preview_key`. Copy the key.
+1. **Supabase.** Open the SQL Editor, paste `supabase-clearance-sale.sql`, run it. The last query returns `items_in_sale` (95) and your `preview_key`. Copy the key.
 2. **GitHub.** Add these files to the repo and push (Vercel deploys):
    - `supabase-clearance-sale.sql`, `CLEARANCE-SALE.md`
    - `middleware.ts` (replaces the old one)

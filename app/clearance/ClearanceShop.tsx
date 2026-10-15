@@ -201,7 +201,6 @@ export default function ClearanceShop({
 
   const deliveryFee = fulfillment === 'delivery' && subtotal > 0 && subtotal < FREE_DELIVERY_MINIMUM ? DELIVERY_FEE : 0
   const total = subtotal + deliveryFee
-  const toFree = Math.max(0, FREE_DELIVERY_MINIMUM - subtotal)
 
   const pay = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -390,7 +389,7 @@ export default function ClearanceShop({
 
       <footer className="clr-foot">
         <div className="clr-wrap">
-          <p>Discount Beauty Barr, Osu and East Legon, Accra. Prices in Ghana cedis. Clearance stock is limited and cannot be reserved. Delivery is {fmt(DELIVERY_FEE)}, free on orders of {fmt(FREE_DELIVERY_MINIMUM)} or more. Pay by card or mobile money through Paystack.</p>
+          <p>Discount Beauty Barr, Osu and East Legon, Accra. Prices in Ghana cedis. Clearance stock is limited and cannot be reserved. Pay by card or mobile money through Paystack.</p>
         </div>
       </footer>
 
@@ -449,10 +448,6 @@ export default function ClearanceShop({
           </div>
         ) : step === 'bag' ? (
           <>
-            <div className="clr-ship">
-              <p>{toFree > 0 ? `Add ${fmt(toFree)} more for free delivery` : 'You have unlocked free delivery'}</p>
-              <div className="clr-meter" aria-hidden="true"><i style={{ width: `${Math.min(100, (subtotal / FREE_DELIVERY_MINIMUM) * 100)}%` }} /></div>
-            </div>
             {lines.map(({ item, qty }) => (
               <div className="clr-line" key={item.variantId}>
                 <div>

@@ -6,10 +6,11 @@ interface CartSummaryProps {
   subtotal: number
   deliveryFee: number
   total: number
+  processingFee?: number
   mode?: 'cart' | 'checkout'
 }
 
-export function CartSummary({ subtotal, deliveryFee, total, mode = 'cart' }: CartSummaryProps) {
+export function CartSummary({ subtotal, deliveryFee, total, processingFee = 0, mode = 'cart' }: CartSummaryProps) {
   const remaining = FREE_DELIVERY_MINIMUM - subtotal
 
   return (
@@ -50,6 +51,12 @@ export function CartSummary({ subtotal, deliveryFee, total, mode = 'cart' }: Car
             {deliveryFee === 0 ? (subtotal === 0 ? '—' : 'Free') : formatCurrency(DELIVERY_FEE)}
           </span>
         </div>
+        {processingFee > 0 && (
+          <div className="flex justify-between">
+            <span style={{ fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '14px', color: '#8C7B74' }}>Card / MoMo processing fee (1.95%)</span>
+            <span style={{ fontFamily: "'Jost', sans-serif", fontWeight: 400, fontSize: '14px', color: '#2C2420' }}>{formatCurrency(processingFee)}</span>
+          </div>
+        )}
       </div>
 
       {/* Total */}

@@ -121,6 +121,7 @@ export interface Database {
           subtotal: number
           delivery_fee: number
           discount: number
+          processing_fee?: number
           total: number
           created_at: string
           updated_at: string

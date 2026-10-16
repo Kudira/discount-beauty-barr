@@ -5,6 +5,8 @@ import { getServiceClient } from '@/lib/supabase/service'
 import { initializeTransaction } from '@/lib/paystack'
 import { DELIVERY_FEE, FREE_DELIVERY_MINIMUM } from '@/lib/constants'
 import { getSiteOrigin } from '@/lib/site-url'
+import { processingFeeFor } from '@/lib/fees'
+import { insertOrderWithFee } from '@/lib/orders-insert'
 
 interface Body {
   items: { variantId: string; quantity: number }[]
@@ -105,13 +107,16 @@ export async function POST(request: Request) {
   if (total <= 0) {
     return NextResponse.json({ error: 'Order total must be more than zero.' }, { status: 400 })
   }
+  // Card / mobile money fee, worked out here so it cannot be changed from the browser.
+  const processingFee = processingFeeFor(total)
+  const payable = round2(total + processingFee)
 
   // ── Create the order (pending until paid) ─────────────────────────────────
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   const customerName = `${customer.firstName} ${customer.lastName ?? ''}`.trim()
 
-  const { data: order, error: orderErr } = await db.from('orders').insert({
+  const { data: order, error: orderErr } = await insertOrderWithFee(db, {
     customer_id: user?.id ?? null,
     branch_id: branch,
     status: 'pending',
@@ -122,8 +127,8 @@ export async function POST(request: Request) {
     delivery_address: fulfillment === 'delivery' ? body.address!.trim() : null,
     delivery_city: fulfillment === 'delivery' ? body.city?.trim() || null : null,
     notes: body.notes?.trim() || null,
-    subtotal, delivery_fee: deliveryFee, discount, total,
-  }).select('id, order_number').single()
+    subtotal, delivery_fee: deliveryFee, discount, total: payable, processing_fee: processingFee,
+  })
   if (orderErr || !order) {
     console.error('[checkout] order insert', orderErr)
     return NextResponse.json({ error: 'Could not create your order. Try again.' }, { status: 500 })
@@ -140,7 +145,7 @@ export async function POST(request: Request) {
     order_id: order.id,
     method: 'card', // updated to the real channel once Paystack confirms
     status: 'pending',
-    amount: total,
+    amount: payable,
     reference,
   })
   if (payErr) {
@@ -153,7 +158,7 @@ export async function POST(request: Request) {
   try {
     const init = await initializeTransaction({
       email: customer.email.trim(),
-      amount: total,
+      amount: payable,
       reference,
       callbackUrl: `${origin}/checkout/verify`,
       metadata: {
@@ -172,7 +177,7 @@ export async function POST(request: Request) {
       action: 'order.created',
       entity_type: 'order',
       entity_id: order.id,
-      details: { order_number: order.order_number, total, source: 'online', status: 'awaiting payment' },
+      details: { order_number: order.order_number, total: payable, processing_fee: processingFee, source: 'online', status: 'awaiting payment' },
     })
 
     return NextResponse.json({ authorizationUrl: init.data.authorization_url, orderNumber: order.order_number })

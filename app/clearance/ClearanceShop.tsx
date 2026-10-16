@@ -6,6 +6,7 @@ import { ArrowRight, Check, Minus, Plus, Search, ShoppingBag, Store, Truck, X } 
 import type { SaleItem, SaleWindow } from '@/lib/clearance'
 import { BRANCHES, DELIVERY_FEE, FREE_DELIVERY_MINIMUM } from '@/lib/constants'
 import Countdown from './Countdown'
+import { processingFeeFor } from '@/lib/fees'
 
 const STORAGE_KEY = 'dbb_clearance_cart'
 const MAX_PER_ITEM = 15
@@ -200,7 +201,9 @@ export default function ClearanceShop({
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setForm((f) => ({ ...f, [k]: e.target.value }))
 
   const deliveryFee = fulfillment === 'delivery' && subtotal > 0 && subtotal < FREE_DELIVERY_MINIMUM ? DELIVERY_FEE : 0
-  const total = subtotal + deliveryFee
+  // Card / mobile money fee, paid by the customer. The server works it out again.
+  const processingFee = processingFeeFor(subtotal + deliveryFee)
+  const total = Math.round((subtotal + deliveryFee + processingFee) * 100) / 100
 
   const pay = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -274,7 +277,7 @@ export default function ClearanceShop({
                   <span className="clr-title-big">{day(campaign.startsAt)}</span>
                   <span className="clr-title-small">{monthName(campaign.startsAt)}</span>
                 </h1>
-                <p className="clr-lede">Ninety-five beauty products, marked down for a few days only, online and in store. Come back when the countdown ends.</p>
+                <p className="clr-lede">Over a hundred beauty products, marked down for a few days only, online and in store. Come back when the countdown ends.</p>
                 <p className="clr-count-label">Sale opens in</p>
                 <Countdown target={campaign.startsAt} serverNow={serverNow} />
               </>
@@ -366,7 +369,7 @@ export default function ClearanceShop({
                   <button type="button" className="clr-tilebtn" onClick={() => setQuick(i)} aria-label={`View ${i.brand} ${i.name}`}>
                     <Tile item={i} />
                   </button>
-                  <span className="clr-seal">-{pct(i)}%</span>
+                  {i.original > i.price && <span className="clr-seal">-{pct(i)}%</span>}
                   {left > 0 && left <= 5 && <span className="clr-left">{left} left</span>}
                   {left === 0 && <span className="clr-sold" aria-hidden="true">Sold out</span>}
                   <div className="clr-info">
@@ -375,8 +378,8 @@ export default function ClearanceShop({
                     {i.variant && i.variant !== i.name && <span className="clr-variant">{i.variant}</span>}
                     <div className="clr-price">
                       <span className="clr-now">{fmt(i.price)}</span>
-                      <span className="clr-was">{fmt(i.original)}</span>
-                      <span className="clr-save">You save {fmt(i.original - i.price)}</span>
+                      {i.original > i.price && <span className="clr-was">{fmt(i.original)}</span>}
+                      {i.original > i.price && <span className="clr-save">You save {fmt(i.original - i.price)}</span>}
                     </div>
                     <AddControl item={i} qty={qty} onSet={(n) => setQty(i, n)} />
                   </div>
@@ -421,10 +424,10 @@ export default function ClearanceShop({
             {quickLive.variant && quickLive.variant !== quickLive.name && <p className="clr-variant">{quickLive.variant}</p>}
             <div className="clr-price" style={{ paddingTop: 12 }}>
               <span className="clr-now" style={{ fontSize: 32 }}>{fmt(quickLive.price)}</span>
-              <span className="clr-was">{fmt(quickLive.original)}</span>
-              <span className="clr-seal" style={{ position: 'static' }}>-{pct(quickLive)}%</span>
+              {quickLive.original > quickLive.price && <span className="clr-was">{fmt(quickLive.original)}</span>}
+              {quickLive.original > quickLive.price && <span className="clr-seal" style={{ position: 'static' }}>-{pct(quickLive)}%</span>}
             </div>
-            <p className="clr-save" style={{ marginTop: 4 }}>You save {fmt(quickLive.original - quickLive.price)}</p>
+            {quickLive.original > quickLive.price && <p className="clr-save" style={{ marginTop: 4 }}>You save {fmt(quickLive.original - quickLive.price)}</p>}
             {quickLive.description && <p className="clr-qv-desc">{quickLive.description}</p>}
             <div className="clr-meter" aria-hidden="true"><i style={{ width: `${Math.max(4, (quickLive.remaining / Math.max(quickLive.total, 1)) * 100)}%` }} /></div>
             <p className="clr-meter-text">{quickLive.remaining === 0 ? 'Sold out' : `${quickLive.remaining} of ${quickLive.total} left`}</p>
@@ -499,6 +502,7 @@ export default function ClearanceShop({
               <div><span>Subtotal ({count} {count === 1 ? 'item' : 'items'})</span><span>{fmt(subtotal)}</span></div>
               <div className="clr-sum-save"><span>You save</span><span>{fmt(saved)}</span></div>
               <div><span>Delivery</span><span>{fulfillment === 'pickup' ? 'Free' : deliveryFee === 0 ? 'Free' : fmt(deliveryFee)}</span></div>
+              {processingFee > 0 && <div><span>Card / MoMo processing fee (1.95%)</span><span>{fmt(processingFee)}</span></div>}
               <div className="clr-sum-total"><span>Total</span><span>{fmt(total)}</span></div>
             </div>
 

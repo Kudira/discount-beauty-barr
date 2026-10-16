@@ -5,7 +5,7 @@ import './clearance.css'
 // links into the rest of the store. Search engines are told to stay away.
 export const metadata: Metadata = {
   title: { absolute: 'Clearance Sale | Discount Beauty Barr' },
-  description: 'Ninety-five beauty products marked down for a few days only, 16 to 19 October. Palettes, primers, setting sprays, serums and body lotions.',
+  description: 'Over a hundred beauty products marked down for a few days only, 16 to 19 October. Palettes, primers, setting sprays, serums and body lotions.',
   robots: { index: false, follow: false, nocache: true },
   openGraph: {
     title: 'Clearance Sale | Discount Beauty Barr',

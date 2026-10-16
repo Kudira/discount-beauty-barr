@@ -13,6 +13,7 @@ import { POSReceipt, type ReceiptData } from '@/components/pos/POSReceipt'
 import { POSMomoModal } from '@/components/pos/POSMomoModal'
 import { formatCurrency } from '@/lib/utils'
 import { MOMO_PROVIDERS, type MomoProvider } from '@/lib/pos/momo-providers'
+import { processingFeeFor } from '@/lib/fees'
 import type { Product } from '@/types'
 import { PRODUCT_CATEGORIES } from '@/lib/constants'
 
@@ -270,6 +271,11 @@ export function POSClient({ products, cashierName, branchId: defaultBranch, bran
     return Math.min(v, subtotal)
   }, [subtotal, discountType, discountValue])
   const total = subtotal - discount
+  // A single mobile money payment goes through Paystack, so the customer pays
+  // its 1.95% fee. Cash, card terminal and split payments carry no fee.
+  const momoViaPaystack = !splitMode && paymentMethod === 'momo'
+  const processingFee = momoViaPaystack ? processingFeeFor(total) : 0
+  const payable = Math.round((total + processingFee) * 100) / 100
   const cashPaid = parseFloat(cashAmount) || 0
   const change = paymentMethod === 'cash' && !splitMode ? Math.max(cashPaid - total, 0) : 0
   const itemCount = cart.reduce((s, i) => s + i.quantity, 0)
@@ -352,7 +358,7 @@ export function POSClient({ products, cashierName, branchId: defaultBranch, bran
       ? split.filter((s) => parseFloat(s.amount) > 0).map((s) => ({ method: s.method, amount: parseFloat(s.amount) }))
       : [{
           method: paymentMethod,
-          amount: total,
+          amount: payable,
           ...(paymentMethod === 'momo' ? { provider: momoProvider, paystackReference } : {}),
         }]
 
@@ -361,7 +367,7 @@ export function POSClient({ products, cashierName, branchId: defaultBranch, bran
       ? apiPayments
       : [{
           method: paymentMethod === 'momo' ? `momo_${momoProvider}` : paymentMethod,
-          amount: paymentMethod === 'cash' ? Math.max(cashPaid || total, total) : total,
+          amount: paymentMethod === 'cash' ? Math.max(cashPaid || total, total) : payable,
         }]
 
     const validBranch = ['osu', 'east-legon'].includes(activeBranch) ? activeBranch : 'osu'
@@ -380,7 +386,7 @@ export function POSClient({ products, cashierName, branchId: defaultBranch, bran
             customer_name: customerName || 'Walk-in Customer',
             customer_email: 'pos@discountbeautybarr.com',
             notes: notes || null,
-            subtotal, delivery_fee: 0, discount, total,
+            subtotal, delivery_fee: 0, discount, total: payable, processing_fee: processingFee,
           },
           orderItems: cart.map((item) => ({
             variant_id: item.variantId,
@@ -406,7 +412,7 @@ export function POSClient({ products, cashierName, branchId: defaultBranch, bran
     setReceipt({
       orderNumber, branchId: validBranch, timestamp,
       items: cart.map((i) => ({ name: i.name, brand: i.brand, variantName: i.variantName, price: i.price, quantity: i.quantity })),
-      subtotal, discount, total, payments: receiptPayments,
+      subtotal, discount, processingFee, total: payable, payments: receiptPayments,
       change: paymentMethod === 'cash' && !splitMode ? change : 0,
       cashierName, customerName: customerName || undefined, notes: notes || undefined,
       paymentReference: paystackReference,
@@ -433,7 +439,7 @@ export function POSClient({ products, cashierName, branchId: defaultBranch, bran
       {qtyPicker && <QtyModal product={qtyPicker.product} variantId={qtyPicker.variantId} onConfirm={(qty) => addToCart(qtyPicker.product, qtyPicker.variantId, qty)} onClose={() => setQtyPicker(null)} />}
       {showMomo && (
         <POSMomoModal
-          amount={total}
+          amount={payable}
           phone={momoPhone}
           provider={momoProvider}
           branchId={activeBranch}
@@ -680,9 +686,15 @@ export function POSClient({ products, cashierName, branchId: defaultBranch, bran
                     <span style={{ fontFamily: "'Jost', sans-serif", fontSize: '12px', color: '#16A34A' }}>-{formatCurrency(discount)}</span>
                   </div>
                 )}
+                {processingFee > 0 && (
+                  <div className="flex justify-between">
+                    <span style={{ fontFamily: "'Jost', sans-serif", fontSize: '12px', color: '#8C7B74' }}>MoMo processing fee (1.95%)</span>
+                    <span style={{ fontFamily: "'Jost', sans-serif", fontSize: '12px', color: '#2C2420' }}>{formatCurrency(processingFee)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between pt-1">
                   <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '18px', color: '#2C2420', fontWeight: 400 }}>Total</span>
-                  <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '22px', color: '#2C2420', fontWeight: 400 }}>{formatCurrency(total)}</span>
+                  <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '22px', color: '#2C2420', fontWeight: 400 }}>{formatCurrency(payable)}</span>
                 </div>
               </div>
 
@@ -769,7 +781,7 @@ export function POSClient({ products, cashierName, branchId: defaultBranch, bran
               {/* Charge button */}
               <button onClick={handleChargeClick} disabled={!canCharge}
                 style={{ width: '100%', padding: '14px', background: canCharge ? '#B76E79' : '#D4C5B8', color: 'white', border: 'none', borderRadius: '8px', fontFamily: "'Cormorant Garamond', serif", fontStyle: 'italic', fontSize: '18px', letterSpacing: '0.04em', cursor: canCharge ? 'pointer' : 'not-allowed', transition: 'background 0.2s' }}>
-                {!splitMode && paymentMethod === 'momo' ? `Send MoMo prompt · ${formatCurrency(total)}` : `Charge ${formatCurrency(total)}`}
+                {!splitMode && paymentMethod === 'momo' ? `Send MoMo prompt · ${formatCurrency(payable)}` : `Charge ${formatCurrency(total)}`}
               </button>
             </div>
           )}

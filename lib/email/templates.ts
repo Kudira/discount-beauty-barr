@@ -28,6 +28,7 @@ export function orderConfirmationTemplate(params: {
   subtotal: number
   deliveryFee: number
   discount: number
+  processingFee?: number
   total: number
   fulfillment: string
   deliveryAddress?: string
@@ -92,6 +93,7 @@ export function orderConfirmationTemplate(params: {
         <tr><td style="font-family: sans-serif; font-size: 13px; color: #8C7B74; padding: 4px 0;">Subtotal</td><td style="text-align: right; font-family: sans-serif; font-size: 13px; color: #2C2420; padding: 4px 0;">GHS ${params.subtotal.toFixed(2)}</td></tr>
         ${params.discount > 0 ? `<tr><td style="font-family: sans-serif; font-size: 13px; color: #16A34A; padding: 4px 0;">Discount</td><td style="text-align: right; font-family: sans-serif; font-size: 13px; color: #16A34A; padding: 4px 0;">-GHS ${params.discount.toFixed(2)}</td></tr>` : ''}
         <tr><td style="font-family: sans-serif; font-size: 13px; color: #8C7B74; padding: 4px 0;">Delivery</td><td style="text-align: right; font-family: sans-serif; font-size: 13px; color: #2C2420; padding: 4px 0;">${params.deliveryFee === 0 ? 'Free' : `GHS ${params.deliveryFee.toFixed(2)}`}</td></tr>
+        ${(params.processingFee ?? 0) > 0 ? `<tr><td style="font-family: sans-serif; font-size: 13px; color: #8C7B74; padding: 4px 0;">Card / MoMo processing fee (1.95%)</td><td style="text-align: right; font-family: sans-serif; font-size: 13px; color: #2C2420; padding: 4px 0;">GHS ${(params.processingFee ?? 0).toFixed(2)}</td></tr>` : ''}
         <tr style="border-top: 1px solid #E8DDD4;"><td style="font-family: Georgia, serif; font-size: 17px; color: #2C2420; padding: 8px 0 0;">Total</td><td style="text-align: right; font-family: Georgia, serif; font-size: 19px; color: #2C2420; padding: 8px 0 0; font-weight: bold;">GHS ${params.total.toFixed(2)}</td></tr>
       </table>
 

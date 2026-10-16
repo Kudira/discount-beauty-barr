@@ -3,6 +3,8 @@ import { getServiceClient } from '@/lib/supabase/service'
 import { getPosSession } from '@/lib/pos/session'
 import { toPesewas, verifyTransaction } from '@/lib/paystack'
 import { checkTillSale } from '@/lib/clearance'
+import { processingFeeFor } from '@/lib/fees'
+import { insertOrderWithFee } from '@/lib/orders-insert'
 
 // POS method ids → payments.method enum ('card' | 'mobile_money' | 'cash' | 'bank_transfer')
 const METHOD_TO_DB: Record<string, string> = {
@@ -56,6 +58,16 @@ export async function POST(request: Request) {
     }
     if (sale.campaignId) orderData.sale_campaign_id = sale.campaignId
 
+    // ── Processing fee: charged only when the money went through Paystack, and
+    // it must be exactly 1.95% of what the goods came to.
+    const fee = Number(orderData.processing_fee ?? 0)
+    const viaPaystack = payments.some((p) => p.paystackReference)
+    const goodsTotal = Math.round((Number(orderData.total) - fee) * 100) / 100
+    const expectedFee = viaPaystack ? processingFeeFor(goodsTotal) : 0
+    if (Math.abs(fee - expectedFee) > 0.005) {
+      return NextResponse.json({ error: 'The mobile money fee on this sale is not correct. Refresh the till and try again.' }, { status: 409 })
+    }
+
     // ── Paystack MoMo: confirm the money actually arrived before saving ──────
     for (const p of payments.filter((x) => x.paystackReference)) {
       const ref = p.paystackReference!
@@ -73,11 +85,7 @@ export async function POST(request: Request) {
     }
 
     // ── Order ─────────────────────────────────────────────────────────────────
-    const { data: order, error: orderError } = await db
-      .from('orders')
-      .insert(orderData)
-      .select('id, order_number')
-      .single()
+    const { data: order, error: orderError } = await insertOrderWithFee(db, orderData)
     if (orderError) {
       return NextResponse.json({ error: orderError.message }, { status: 400 })
     }

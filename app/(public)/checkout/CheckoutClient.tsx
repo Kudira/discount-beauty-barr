@@ -9,6 +9,7 @@ import { CartSummary } from '@/components/cart/CartSummary'
 import { EmptyCart } from '@/components/cart/EmptyCart'
 import { BRANCHES } from '@/lib/constants'
 import { formatCurrency } from '@/lib/utils'
+import { processingFeeFor } from '@/lib/fees'
 import { createClient } from '@/lib/supabase/client'
 
 type Fulfillment = 'delivery' | 'pickup'
@@ -61,7 +62,10 @@ export function CheckoutClient() {
 
   // Pickup is free; the server recalculates all of this before charging.
   const deliveryFee = form.fulfillment === 'pickup' ? 0 : cartDeliveryFee
-  const finalTotal = Math.max(0, subtotal + deliveryFee - (promoApplied?.discount ?? 0))
+  const goodsTotal = Math.max(0, subtotal + deliveryFee - (promoApplied?.discount ?? 0))
+  // Card / mobile money fee, paid by the customer. The server works it out again.
+  const processingFee = processingFeeFor(goodsTotal)
+  const finalTotal = Math.round((goodsTotal + processingFee) * 100) / 100
 
   if (items.length === 0) return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20"><EmptyCart /></div>
@@ -265,7 +269,7 @@ export function CheckoutClient() {
 
         <div className="lg:col-span-1">
           <div className="sticky top-24 flex flex-col gap-4">
-            <CartSummary subtotal={subtotal} deliveryFee={deliveryFee} total={finalTotal} mode="checkout" />
+            <CartSummary subtotal={subtotal} deliveryFee={deliveryFee} total={finalTotal} processingFee={processingFee} mode="checkout" />
             <div className="flex flex-col gap-3 p-5" style={{ background: '#FAF7F4', border: '1px solid #E8DDD4', borderRadius: '2px' }}>
               <h4 style={{ fontFamily: "'Cormorant Garamond', serif", fontWeight: 400, fontSize: '16px', color: '#2C2420' }}>
                 {items.length} Item{items.length !== 1 ? 's' : ''}

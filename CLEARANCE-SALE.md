@@ -5,6 +5,8 @@ Standalone page at `/clearance`. It has its own header (no main-site menu or foo
 ## Go-live steps
 
 1. **Supabase.** Open the SQL Editor, paste `supabase-clearance-sale.sql`, run it. The last query returns `items_in_sale` (95) and your `preview_key`. Copy the key.
+
+**Adding the second batch (30 more items, 125 in total).** After the first SQL, run `DBB clearance addon 30.sql` the same way. It is safe while the sale is live and safe to run twice. Its last query should return `items_in_sale` = 125. No redeploy is needed, the page reads items from Supabase.
 2. **GitHub.** Add these files to the repo and push (Vercel deploys):
    - `supabase-clearance-sale.sql`, `CLEARANCE-SALE.md`
    - `middleware.ts` (replaces the old one)
@@ -36,3 +38,13 @@ While the sale is live (16 to 19 October), the POS shows the clearance products 
 - **Outside the dates** the clearance products disappear from the till, and any open till page is refused if it tries to sell one.
 - Sales are recorded as normal till sales, with the order tagged to the clearance campaign so you can find them in `orders` (`sale_campaign_id`).
 - Your regular product stock (Admin > Inventory) is unchanged by the clearance sale. The clearance units are counted separately.
+
+## 1.95% card / mobile money fee
+
+Customers now pay Paystack's 1.95% on top. Run `supabase-processing-fee.sql` once in the Supabase SQL Editor (it adds `orders.processing_fee`). Checkout still works if you deploy first; the fee is simply not stored separately until the SQL is run.
+
+- **Where it applies:** the website checkout, the clearance checkout, and a single mobile money payment at the till (the one that sends a prompt through Paystack).
+- **Where it does not:** cash, the card machine, and split payments at the till. Nothing goes through Paystack there.
+- **How it is worked out:** 1.95% of (items + delivery - discount), rounded to the nearest pesewa, on the server. The customer sees it as its own line before the total, and it appears on the order email, the till receipt and the admin order page.
+- **Reports:** `orders.total` is what the customer paid, fee included. Goods and delivery = `total - processing_fee`.
+- **One rule in one place:** `lib/fees.ts`. Change `PROCESSING_FEE_RATE` there to change the rate everywhere.

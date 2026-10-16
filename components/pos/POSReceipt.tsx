@@ -9,6 +9,7 @@ export interface ReceiptData {
   items: { name: string; brand: string; variantName: string; price: number; quantity: number }[]
   subtotal: number
   discount: number
+  processingFee?: number
   total: number
   payments: { method: string; amount: number }[]
   change: number
@@ -88,6 +89,7 @@ function buildReceiptHTML(receipt: ReceiptData): string {
   <div class="rule"></div>
   ${row('Subtotal', money(receipt.subtotal))}
   ${receipt.discount > 0 ? row('Discount', `-${money(receipt.discount)}`) : ''}
+  ${(receipt.processingFee ?? 0) > 0 ? row('MoMo fee (1.95%)', money(receipt.processingFee ?? 0)) : ''}
   ${row('TOTAL', money(receipt.total), 'total')}
   <div class="rule"></div>
   ${receipt.payments.map((p) => row(esc(METHOD_LABELS[p.method] ?? p.method), money(p.amount))).join('')}
@@ -220,6 +222,12 @@ export function POSReceipt({ receipt, onNewSale }: { receipt: ReceiptData; onNew
               <div className="flex justify-between">
                 <span style={{ fontFamily: "'Jost', sans-serif", fontSize: '12px', color: '#16A34A' }}>Discount</span>
                 <span style={{ fontFamily: "'Jost', sans-serif", fontSize: '12px', color: '#16A34A' }}>-{formatCurrency(receipt.discount)}</span>
+              </div>
+            )}
+            {(receipt.processingFee ?? 0) > 0 && (
+              <div className="flex justify-between">
+                <span style={{ fontFamily: "'Jost', sans-serif", fontSize: '12px', color: '#8C7B74' }}>MoMo processing fee (1.95%)</span>
+                <span style={{ fontFamily: "'Jost', sans-serif", fontSize: '12px', color: '#2C2420' }}>{formatCurrency(receipt.processingFee ?? 0)}</span>
               </div>
             )}
             <div className="flex justify-between pt-1" style={{ borderTop: '1px solid #E8DDD4' }}>

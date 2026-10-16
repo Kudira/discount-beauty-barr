@@ -124,6 +124,12 @@ export function OrderDetailClient({ order }: { order: OrderWithItems }) {
                 <span style={{ fontFamily: "'Jost', sans-serif", fontSize: '13px', color: '#8C7B74' }}>Delivery</span>
                 <span style={{ fontFamily: "'Jost', sans-serif", fontSize: '13px', color: '#2C2420' }}>{order.delivery_fee === 0 ? 'Free' : formatCurrency(order.delivery_fee)}</span>
               </div>
+              {Number(order.processing_fee ?? 0) > 0 && (
+                <div className="flex justify-between">
+                  <span style={{ fontFamily: "'Jost', sans-serif", fontSize: '13px', color: '#8C7B74' }}>Processing fee (1.95%)</span>
+                  <span style={{ fontFamily: "'Jost', sans-serif", fontSize: '13px', color: '#2C2420' }}>{formatCurrency(Number(order.processing_fee))}</span>
+                </div>
+              )}
               <div className="flex justify-between pt-2" style={{ borderTop: '1px solid #F2EDE8' }}>
                 <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '18px', color: '#2C2420', fontWeight: 400 }}>Total</span>
                 <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '20px', color: '#2C2420', fontWeight: 400 }}>{formatCurrency(order.total)}</span>

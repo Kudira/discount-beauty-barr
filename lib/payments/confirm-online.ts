@@ -19,7 +19,7 @@ export async function confirmOnlinePayment(reference: string): Promise<ConfirmRe
 
   const { data: payment } = await db
     .from('payments')
-    .select('id, status, amount, order_id, orders(id, order_number, status, customer_name, customer_email, fulfillment, delivery_address, branch_id, subtotal, delivery_fee, discount, total)')
+    .select('id, status, amount, order_id, orders(id, order_number, status, customer_name, customer_email, fulfillment, delivery_address, branch_id, subtotal, delivery_fee, discount, total, processing_fee)')
     .eq('reference', reference)
     .maybeSingle()
 
@@ -100,6 +100,7 @@ export async function confirmOnlinePayment(reference: string): Promise<ConfirmRe
       subtotal: Number(order?.subtotal ?? 0),
       deliveryFee: Number(order?.delivery_fee ?? 0),
       discount: Number(order?.discount ?? 0),
+      processingFee: Number(order?.processing_fee ?? 0),
       total: Number(order?.total ?? 0),
       fulfillment: order?.fulfillment,
       deliveryAddress: order?.fulfillment === 'delivery' ? order?.delivery_address ?? undefined : undefined,

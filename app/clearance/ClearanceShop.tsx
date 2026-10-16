@@ -369,7 +369,7 @@ export default function ClearanceShop({
                   <button type="button" className="clr-tilebtn" onClick={() => setQuick(i)} aria-label={`View ${i.brand} ${i.name}`}>
                     <Tile item={i} />
                   </button>
-                  <span className="clr-seal">-{pct(i)}%</span>
+                  {i.original > i.price && <span className="clr-seal">-{pct(i)}%</span>}
                   {left > 0 && left <= 5 && <span className="clr-left">{left} left</span>}
                   {left === 0 && <span className="clr-sold" aria-hidden="true">Sold out</span>}
                   <div className="clr-info">
@@ -378,8 +378,8 @@ export default function ClearanceShop({
                     {i.variant && i.variant !== i.name && <span className="clr-variant">{i.variant}</span>}
                     <div className="clr-price">
                       <span className="clr-now">{fmt(i.price)}</span>
-                      <span className="clr-was">{fmt(i.original)}</span>
-                      <span className="clr-save">You save {fmt(i.original - i.price)}</span>
+                      {i.original > i.price && <span className="clr-was">{fmt(i.original)}</span>}
+                      {i.original > i.price && <span className="clr-save">You save {fmt(i.original - i.price)}</span>}
                     </div>
                     <AddControl item={i} qty={qty} onSet={(n) => setQty(i, n)} />
                   </div>
@@ -424,10 +424,10 @@ export default function ClearanceShop({
             {quickLive.variant && quickLive.variant !== quickLive.name && <p className="clr-variant">{quickLive.variant}</p>}
             <div className="clr-price" style={{ paddingTop: 12 }}>
               <span className="clr-now" style={{ fontSize: 32 }}>{fmt(quickLive.price)}</span>
-              <span className="clr-was">{fmt(quickLive.original)}</span>
-              <span className="clr-seal" style={{ position: 'static' }}>-{pct(quickLive)}%</span>
+              {quickLive.original > quickLive.price && <span className="clr-was">{fmt(quickLive.original)}</span>}
+              {quickLive.original > quickLive.price && <span className="clr-seal" style={{ position: 'static' }}>-{pct(quickLive)}%</span>}
             </div>
-            <p className="clr-save" style={{ marginTop: 4 }}>You save {fmt(quickLive.original - quickLive.price)}</p>
+            {quickLive.original > quickLive.price && <p className="clr-save" style={{ marginTop: 4 }}>You save {fmt(quickLive.original - quickLive.price)}</p>}
             {quickLive.description && <p className="clr-qv-desc">{quickLive.description}</p>}
             <div className="clr-meter" aria-hidden="true"><i style={{ width: `${Math.max(4, (quickLive.remaining / Math.max(quickLive.total, 1)) * 100)}%` }} /></div>
             <p className="clr-meter-text">{quickLive.remaining === 0 ? 'Sold out' : `${quickLive.remaining} of ${quickLive.total} left`}</p>

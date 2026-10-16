@@ -1,7 +1,8 @@
--- DBB clearance ADD-ON: 30 more items (CLR-096 to CLR-125), qty 15 each.
+-- DBB clearance ADD-ON: 35 more items (CLR-096 to CLR-130), qty 15 each.
 -- Safe to run while the sale is live. Safe to run twice (skips what exists).
 -- Needs the main clearance SQL to have been run already.
--- Left out on purpose: 13 items already in the sale, and 5 with no original price.
+-- Left out on purpose: 13 items already in the sale.
+-- CLR-126 to CLR-130 have no original price, so they sell at their promo price with no discount badge.
 
 drop table if exists _clr;
 create temporary table _clr (
@@ -39,7 +40,12 @@ insert into _clr values
   ('clr-122-blossom-makeup-liquid-complexion-product-assorted-shades','CLR-122','Liquid Complexion Product – Assorted Shades','Blossom Makeup','makeup','Liquid complexion product shown with a full shade swatch range.','Assorted light-to-deep shades',120,95,15,122),
   ('clr-123-duchess-glow-vitamins-c-turmeric-beauty-therapy-oil','CLR-123','Vitamins C + Turmeric Beauty Therapy Oil','Duchess Glow','body','Body treatment oil with vitamins C and turmeric.','Vitamin C + Turmeric',120,100,15,123),
   ('clr-124-duchess-glow-super-l-glutathione-beauty-therapy-oil','CLR-124','Super L-Glutathione Beauty Therapy Oil','Duchess Glow','body','Body treatment oil with L-glutathione.','Super L-Glutathione',120,100,15,124),
-  ('clr-125-duchess-glow-retinol-centella-extract-beauty-therapy-oil','CLR-125','Retinol + Centella Extract Beauty Therapy Oil','Duchess Glow','body','Body treatment oil with retinol and centella extract.','Retinol + Centella Extract',120,100,15,125);
+  ('clr-125-duchess-glow-retinol-centella-extract-beauty-therapy-oil','CLR-125','Retinol + Centella Extract Beauty Therapy Oil','Duchess Glow','body','Body treatment oil with retinol and centella extract.','Retinol + Centella Extract',120,100,15,125),
+  ('clr-126-miss-betty-lip-gloss','CLR-126','Lip Gloss','Miss Betty','makeup','Lip gloss for shine and colour.','Brown/nude shade shown',25,25,15,126),
+  ('clr-127-vc-matte-friends-reunion-palette-josephine','CLR-127','Matte Friends Reunion Palette – Josephine','VC','makeup','Large matte makeup palette.','Josephine',190,190,15,127),
+  ('clr-128-avour-super-stay-full-coverage-matte-foundation-spf25','CLR-128','Super Stay Full Coverage Matte Foundation SPF25','Avour','makeup','Full-coverage matte liquid foundation.','SPF 25 / assorted shades',60,60,15,128),
+  ('clr-129-avour-bestskin-full-coverage-foundation-spf20','CLR-129','Bestskin Full Coverage Foundation SPF20','Avour','makeup','Full-coverage liquid foundation.','SPF 20',120,120,15,129),
+  ('clr-130-l-or-al-paris-infallible-24h-fresh-wear-foundation','CLR-130','Infallible 24H Fresh Wear Foundation','L''Oréal Paris','makeup','24-hour long-wear liquid foundation.','Shade shown in follow-up image',100,100,15,130);
 
 insert into public.products (name, slug, description, category, brand, base_price, is_active, is_featured)
 select c.name, c.slug, c.description, c.category::product_category, c.brand, c.original_price, false, false
@@ -61,7 +67,7 @@ on conflict (campaign_id, variant_id) do nothing;
 
 drop table if exists _clr;
 
--- Check: should return 125 items and the preview key -----------------------
+-- Check: should return 130 items and the preview key -----------------------
 select (select count(*) from public.sale_items) as items_in_sale,
        preview_key as preview_key_copy_this
 from public.sale_campaigns where slug = 'october-clearance';

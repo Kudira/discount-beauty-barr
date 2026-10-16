@@ -6,7 +6,7 @@ Standalone page at `/clearance`. It has its own header (no main-site menu or foo
 
 1. **Supabase.** Open the SQL Editor, paste `supabase-clearance-sale.sql`, run it. The last query returns `items_in_sale` (95) and your `preview_key`. Copy the key.
 
-**Adding the second batch (30 more items, 125 in total).** After the first SQL, run `DBB clearance addon 30.sql` the same way. It is safe while the sale is live and safe to run twice. Its last query should return `items_in_sale` = 125. No redeploy is needed, the page reads items from Supabase.
+**Adding the second batch (35 more items, 130 in total).** After the first SQL, run `DBB clearance addon 35.sql` the same way. It is safe while the sale is live and safe to run twice. Its last query should return `items_in_sale` = 130. Deploy the code first so items without a discount show cleanly.
 2. **GitHub.** Add these files to the repo and push (Vercel deploys):
    - `supabase-clearance-sale.sql`, `CLEARANCE-SALE.md`
    - `middleware.ts` (replaces the old one)

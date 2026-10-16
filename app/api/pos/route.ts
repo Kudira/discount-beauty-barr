@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServiceClient } from '@/lib/supabase/service'
 import { getPosSession } from '@/lib/pos/session'
 import { toPesewas, verifyTransaction } from '@/lib/paystack'
+import { checkTillSale } from '@/lib/clearance'
 
 // POS method ids → payments.method enum ('card' | 'mobile_money' | 'cash' | 'bank_transfer')
 const METHOD_TO_DB: Record<string, string> = {
@@ -46,6 +47,14 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: `Unknown payment method: ${p.method}` }, { status: 400 })
       }
     }
+
+    // ── Clearance sale: prices and stock are checked here, not trusted from
+    // the browser, and the order is tagged so the website's stock count drops.
+    const sale = await checkTillSale(orderItems ?? [])
+    if (sale.error) {
+      return NextResponse.json({ error: sale.error }, { status: 409 })
+    }
+    if (sale.campaignId) orderData.sale_campaign_id = sale.campaignId
 
     // ── Paystack MoMo: confirm the money actually arrived before saving ──────
     for (const p of payments.filter((x) => x.paystackReference)) {

@@ -68,7 +68,7 @@ function QtyModal({ product, variantId, onConfirm, onClose }: {
   const [qty, setQty] = useState(1)
   const variant = product.variants.find((v) => v.id === variantId)
   if (!variant) return null
-  const maxQty = variant.stock > 0 ? variant.stock : 99
+  const maxQty = product.clearance ? Math.max(product.clearance.remaining, 1) : variant.stock > 0 ? variant.stock : 99
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4"

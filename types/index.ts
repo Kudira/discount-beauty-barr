@@ -34,6 +34,8 @@ export type Product = {
   isFeatured: boolean
   isActive: boolean
   createdAt: string
+  /** Set on clearance-sale products shown at the till. */
+  clearance?: { originalPrice: number; remaining: number }
 }
 
 // ─── Cart ────────────────────────────────────────────────────────────────────

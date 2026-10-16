@@ -26,3 +26,13 @@ Set `SALE_LOCKDOWN_UNTIL` in Vercel to `2026-10-20T00:00:00Z` and redeploy. Unti
 - Units left = `sale_qty` minus paid orders, minus unpaid orders started in the last 30 minutes. This is separate from the branch `inventory` table, which the sale does not change.
 - Orders carry `sale_campaign_id` and the note "[Clearance sale]" so you can find them in Admin > Orders.
 - To change dates, on/off or the preview key, edit the row in `sale_campaigns`.
+
+## At the till (POS)
+
+While the sale is live (16 to 19 October), the POS shows the clearance products first, with a gold CLEARANCE badge, the sale price (original struck through) and the units left.
+
+- **One stock count.** Till sales and website orders draw from the same units (10 or 15 per product). When it hits zero the card shows SOLD OUT at the till and on the website.
+- **Prices are enforced by the server.** If a till page was left open with an old price, the sale is refused with a message to refresh. A cashier cannot sell more than what is left.
+- **Outside the dates** the clearance products disappear from the till, and any open till page is refused if it tries to sell one.
+- Sales are recorded as normal till sales, with the order tagged to the clearance campaign so you can find them in `orders` (`sale_campaign_id`).
+- Your regular product stock (Admin > Inventory) is unchanged by the clearance sale. The clearance units are counted separately.

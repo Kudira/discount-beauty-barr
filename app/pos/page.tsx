@@ -1,6 +1,7 @@
 import { POSAuthWrapper } from './POSAuthWrapper'
 import { getProducts } from '@/lib/getProducts'
 import { getPosSession } from '@/lib/pos/session'
+import { getPosClearanceProducts } from '@/lib/clearance'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,7 +11,9 @@ export default async function POSPage() {
   // browser (e.g. page refresh), resume their session; no PINs or staff
   // list are ever sent to the browser either way.
   const session = await getPosSession()
-  const products = await getProducts()
+  const [regular, clearance] = await Promise.all([getProducts(), getPosClearanceProducts()])
+  // Clearance items come first while the sale is live.
+  const products = [...clearance, ...regular]
 
   return (
     <POSAuthWrapper

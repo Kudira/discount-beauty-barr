@@ -14,20 +14,24 @@ export function POSProductCard({ product, onAdd }: POSProductCardProps) {
   const image = product.images?.[0]
 
   // If only one variant, add directly. If multiple, show first variant.
+  const soldOut = !!product.clearance && product.clearance.remaining <= 0
   const handleTap = () => {
+    if (soldOut) return
     if (firstVariant) onAdd(product, firstVariant.id)
   }
 
   return (
     <button
       onClick={handleTap}
+      disabled={soldOut}
       className="group relative flex flex-col text-left w-full transition-all duration-150 active:scale-95"
       style={{
         background: 'white',
         border: '1px solid #E8DDD4',
         borderRadius: '6px',
         overflow: 'hidden',
-        cursor: 'pointer',
+        cursor: soldOut ? 'not-allowed' : 'pointer',
+        opacity: soldOut ? 0.55 : 1,
       }}
     >
       {/* Image */}
@@ -41,6 +45,13 @@ export function POSProductCard({ product, onAdd }: POSProductCardProps) {
               {product.brand}
             </span>
           </div>
+        )}
+
+        {product.clearance && (
+          <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5"
+            style={{ background: soldOut ? '#8C7B74' : '#B8862B', color: 'white', fontSize: '9px', borderRadius: '3px', fontFamily: "'Jost', sans-serif", letterSpacing: '0.06em', fontWeight: 500 }}>
+            {soldOut ? 'SOLD OUT' : `CLEARANCE · ${product.clearance.remaining} left`}
+          </span>
         )}
 
         {/* Quick add overlay */}
@@ -69,6 +80,9 @@ export function POSProductCard({ product, onAdd }: POSProductCardProps) {
         </p>
         <p style={{ fontSize: '13px', color: '#2C2420', fontFamily: "'Cormorant Garamond', serif", fontWeight: 400, marginTop: '2px' }}>
           {formatCurrency(firstVariant?.price ?? product.basePrice)}
+          {product.clearance && (
+            <s style={{ marginLeft: '6px', fontSize: '11px', color: '#A09088' }}>{formatCurrency(product.clearance.originalPrice)}</s>
+          )}
         </p>
       </div>
     </button>

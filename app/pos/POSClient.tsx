@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import {
   Search, X, Minus, Plus, Trash2, ChevronDown,
   ShoppingBag, Tag, User, FileText, LogOut,
   Banknote, CreditCard, Smartphone, SplitSquareHorizontal,
-  Store, Clock, AlertTriangle, CheckCircle2, MapPin
+  Store, Clock, AlertTriangle, CheckCircle2, MapPin, Monitor
 } from 'lucide-react'
 import { POSProductCard } from '@/components/pos/POSProductCard'
 import { POSVariantModal } from '@/components/pos/POSVariantModal'
@@ -14,6 +14,7 @@ import { POSMomoModal } from '@/components/pos/POSMomoModal'
 import { formatCurrency } from '@/lib/utils'
 import { MOMO_PROVIDERS, type MomoProvider } from '@/lib/pos/momo-providers'
 import { processingFeeFor } from '@/lib/fees'
+import { DISPLAY_CHANNEL, type DisplayMessage, type DisplayState } from '@/lib/pos/customer-display'
 import type { Product } from '@/types'
 import { PRODUCT_CATEGORIES } from '@/lib/constants'
 
@@ -289,6 +290,52 @@ export function POSClient({ products, cashierName, branchId: defaultBranch, bran
     return true
   }, [cart, total, splitMode, splitTotal, paymentMethod, cashAmount, cashPaid, momoPhone])
 
+  // ── Customer-facing display (second monitor) ───────────────────────────────
+  // The display window is a separate browser tab/window that listens on this
+  // same-origin BroadcastChannel. Whenever the sale changes, push the latest
+  // snapshot; if a display window is opened later, it asks (via "hello") for
+  // the current state so it isn't left blank.
+  const displayChannel = useRef<BroadcastChannel | null>(null)
+
+  useEffect(() => {
+    if (typeof BroadcastChannel === 'undefined') return
+    const channel = new BroadcastChannel(DISPLAY_CHANNEL)
+    displayChannel.current = channel
+    channel.onmessage = (e: MessageEvent<DisplayMessage>) => {
+      if (e.data?.type === 'hello') sendDisplayState()
+    }
+    return () => channel.close()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const sendDisplayState = () => {
+    const channel = displayChannel.current
+    if (!channel) return
+    const stage: DisplayState['stage'] =
+      screen === 'receipt' ? 'paid' : screen === 'confirm' ? 'confirm' : cart.length === 0 ? 'idle' : 'shopping'
+    channel.postMessage({
+      type: 'state',
+      stage,
+      branchId: activeBranch,
+      items: cart.map((i) => ({ name: i.name, variantName: i.variantName, price: i.price, quantity: i.quantity })),
+      subtotal,
+      discount,
+      total,
+      paymentMethod: splitMode ? undefined : paymentMethod,
+      cashPaid: paymentMethod === 'cash' ? cashPaid : undefined,
+      change,
+    } satisfies DisplayState)
+  }
+
+  useEffect(() => {
+    sendDisplayState()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cart, subtotal, discount, total, screen, paymentMethod, cashPaid, change, activeBranch, splitMode])
+
+  const openCustomerDisplay = () => {
+    window.open('/pos/display', 'dbb-customer-display', 'noopener')
+  }
+
   // ── Cart ────────────────────────────────────────────────────────────────────
   const addToCart = (product: Product, variantId: string, qty: number = 1) => {
     const variant = product.variants.find((v) => v.id === variantId)
@@ -515,6 +562,12 @@ export function POSClient({ products, cashierName, branchId: defaultBranch, bran
                 {new Date().toLocaleTimeString('en-GH', { hour: '2-digit', minute: '2-digit' })}
               </span>
             </div>
+            {/* Customer display — opens the second-monitor screen in its own window */}
+            <button onClick={openCustomerDisplay} title="Open the customer-facing screen"
+              style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 8px', borderRadius: '4px', background: 'rgba(255,255,255,0.08)', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.6)', flexShrink: 0 }}>
+              <Monitor size={12} />
+              <span className="hidden sm:inline" style={{ fontFamily: "'Jost', sans-serif", fontSize: '11px', fontWeight: 300 }}>Display</span>
+            </button>
             {/* Logout */}
             <button onClick={onLogout ?? (() => window.location.href = '/admin')}
               style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '28px', height: '28px', borderRadius: '50%', background: 'rgba(255,255,255,0.08)', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.4)', flexShrink: 0 }}>

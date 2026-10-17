@@ -70,7 +70,7 @@ function QtyModal({ product, variantId, onConfirm, onClose }: {
   const [qty, setQty] = useState(1)
   const variant = product.variants.find((v) => v.id === variantId)
   if (!variant) return null
-  const maxQty = product.clearance ? Math.max(product.clearance.remaining, 1) : variant.stock > 0 ? variant.stock : 99
+  const maxQty = product.clearance ? Math.max(product.clearance.remaining, 1) : variant.stock > 0 ? variant.stock : 99 /* 0 recorded: still sellable, stock goes negative */
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4"
@@ -450,6 +450,8 @@ export function POSClient({ products, cashierName, branchId: defaultBranch, bran
         saveWarning = `This sale was NOT saved (${json.error ?? 'server error'}). Tell a manager.`
       } else if (json.partial) {
         saveWarning = `Sale saved with a problem (${json.warning}). Tell a manager.`
+      } else if (Array.isArray(json.negativeStock) && json.negativeStock.length > 0) {
+        saveWarning = `Sale saved. Stock was not recorded for: ${json.negativeStock.map((n: any) => n.name ?? n.sku).join(', ')}. It now shows as negative. Tell a manager to update the count.`
       }
     } catch (err: any) {
       console.error('[POS] Exception:', err?.message ?? err)

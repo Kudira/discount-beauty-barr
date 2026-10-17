@@ -1,27 +1,17 @@
 import { NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/server'
+import { requireManager, authErrorResponse } from '@/lib/auth/guards'
+import { setOrderStatus } from '@/lib/orders-status'
 
 export async function PATCH(request: Request) {
   try {
+    const caller = await requireManager()
     const { orderId, status } = await request.json()
-    const admin = createAdminClient()
-
-    const { error } = await admin
-      .from('orders')
-      .update({ status })
-      .eq('id', orderId)
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 })
-
-    await admin.from('activity_log').insert({
-      action: 'order.status_updated',
-      entity_type: 'order',
-      entity_id: orderId,
-      details: { to: status },
-    })
-
+    if (typeof orderId !== 'string' || typeof status !== 'string') {
+      return NextResponse.json({ error: 'Missing order or status.' }, { status: 400 })
+    }
+    await setOrderStatus(orderId, status, caller)
     return NextResponse.json({ success: true })
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+    return authErrorResponse(err) ?? NextResponse.json({ error: err.message }, { status: 400 })
   }
 }

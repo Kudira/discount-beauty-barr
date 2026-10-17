@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import { requireManager, authErrorResponse } from '@/lib/auth/guards'
 
 function getAdmin() {
   return createSupabaseClient(
@@ -11,6 +12,9 @@ function getAdmin() {
 
 export async function POST(request: Request) {
   try {
+    // Only dashboard staff may send email from the browser; otherwise anyone
+    // could use this endpoint to send mail from our domain.
+    await requireManager()
     const body = await request.json()
     const { to, subject, html, orderId, template } = body
 
@@ -64,16 +68,20 @@ export async function POST(request: Request) {
 
     // Update log
     if (logId) {
-      await db.from('email_log').update({
-        status: success ? 'sent' : 'failed',
-        error: success ? null : errorMsg.slice(0, 500),
-      }).eq('id', logId).catch(() => {})
+      try {
+        await db.from('email_log').update({
+          status: success ? 'sent' : 'failed',
+          error: success ? null : errorMsg.slice(0, 500),
+        }).eq('id', logId)
+      } catch {}
     }
 
     // Always return 200 so the checkout never fails due to email
     return NextResponse.json({ success, error: success ? null : errorMsg })
 
   } catch (err: any) {
+    const denied = authErrorResponse(err)
+    if (denied) return denied
     console.error('[Email API] Unexpected error:', err?.message)
     return NextResponse.json({ success: false, error: err.message }, { status: 200 })
   }

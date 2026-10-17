@@ -72,7 +72,7 @@ export function ContentClient({ pages }: { pages: PageContent[] }) {
       .upload(path, file, { upsert: true, contentType: file.type })
 
     if (error) {
-      alert(`Upload failed: ${error.message}\n\nMake sure you ran supabase-phase7b.sql in your Supabase SQL Editor.`)
+      alert(`Upload failed: ${error.message}\n\nMake sure you are signed in as an admin.`)
       setUploading(null)
       return
     }

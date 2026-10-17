@@ -1,28 +1,30 @@
 import { NextResponse } from 'next/server'
 import { randomUUID, randomBytes } from 'crypto'
 import { getServiceClient } from '@/lib/supabase/service'
+import { requireManager, authErrorResponse } from '@/lib/auth/guards'
 
 // Creates a staff record with no email/password login — the person only
 // ever signs in at the till with a PIN. A hidden auth.users row is still
 // created behind the scenes (profiles.id requires one), with a random
 // password nobody is given and an unreachable @pos.internal email, so it
 // can never be used to log in to the website or admin dashboard.
-const BRANCHES = ['osu', 'east-legon']
-
 export async function POST(request: Request) {
+  try { await requireManager() } catch (e) { return authErrorResponse(e) ?? NextResponse.json({ error: 'Not allowed' }, { status: 403 }) }
   const { fullName, branchId, posPin } = await request.json().catch(() => ({}))
 
   if (typeof fullName !== 'string' || fullName.trim().length < 2) {
     return NextResponse.json({ error: 'Enter the cashier’s name.' }, { status: 400 })
-  }
-  if (branchId && !BRANCHES.includes(branchId)) {
-    return NextResponse.json({ error: 'Choose a valid branch.' }, { status: 400 })
   }
   if (posPin && !/^\d{4,6}$/.test(posPin)) {
     return NextResponse.json({ error: 'PIN must be 4–6 digits.' }, { status: 400 })
   }
 
   const db = getServiceClient()
+
+  if (branchId) {
+    const { data: branch } = await db.from('branches').select('id').eq('id', branchId).maybeSingle()
+    if (!branch) return NextResponse.json({ error: 'Choose a valid branch.' }, { status: 400 })
+  }
 
   if (posPin) {
     const { data: taken } = await db.from('profiles').select('id').eq('pos_pin', posPin).limit(1)

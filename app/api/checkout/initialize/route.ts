@@ -7,6 +7,7 @@ import { DELIVERY_FEE, FREE_DELIVERY_MINIMUM } from '@/lib/constants'
 import { getSiteOrigin } from '@/lib/site-url'
 import { processingFeeFor } from '@/lib/fees'
 import { insertOrderWithFee } from '@/lib/orders-insert'
+import { rateLimit, clientIp } from '@/lib/rate-limit'
 
 interface Body {
   items: { variantId: string; quantity: number }[]
@@ -29,6 +30,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Your cart is empty.' }, { status: 400 })
   }
   const { customer, fulfillment } = body
+  // Slow down scripts that spam orders (each order holds stock / starts a payment).
+  if (!rateLimit(`checkout:ip:${clientIp(request)}`, 10, 10 * 60_000) ||
+      (typeof customer?.email === 'string' && !rateLimit(`checkout:email:${customer.email.toLowerCase()}`, 5, 10 * 60_000))) {
+    return NextResponse.json({ error: 'Too many attempts. Please wait a few minutes and try again.' }, { status: 429 })
+  }
   if (!customer?.email || !/^\S+@\S+\.\S+$/.test(customer.email) || !customer.firstName) {
     return NextResponse.json({ error: 'Enter your name and a valid email address.' }, { status: 400 })
   }
@@ -38,7 +44,6 @@ export async function POST(request: Request) {
   if (fulfillment === 'delivery' && !body.address?.trim()) {
     return NextResponse.json({ error: 'Enter a delivery address.' }, { status: 400 })
   }
-  const branch = fulfillment === 'pickup' ? (['osu', 'east-legon'].includes(body.branch ?? '') ? body.branch! : 'osu') : null
 
   for (const i of body.items) {
     if (typeof i.variantId !== 'string' || !Number.isInteger(i.quantity) || i.quantity < 1 || i.quantity > 99) {
@@ -47,6 +52,14 @@ export async function POST(request: Request) {
   }
 
   const db = getServiceClient()
+
+  // Pickup branch: must be a real, active branch (falls back to the first one).
+  let branch: string | null = null
+  if (fulfillment === 'pickup') {
+    const { data: branches } = await db.from('branches').select('id').eq('is_active', true).order('name')
+    const ids = (branches ?? []).map((b: any) => b.id as string)
+    branch = ids.includes(body.branch ?? '') ? body.branch! : (ids[0] ?? null)
+  }
 
   // ── Price everything from the database ────────────────────────────────────
   const ids = [...new Set(body.items.map((i) => i.variantId))]
@@ -76,6 +89,25 @@ export async function POST(request: Request) {
       price: Number(v.price),
       quantity: i.quantity,
     })
+  }
+
+  // ── Stock: do not sell more than the shops have (the website hides the
+  // buy button at 0, this stops a hand-made request doing it anyway).
+  const { data: stockRows } = await db.from('inventory').select('variant_id, quantity').in('variant_id', ids)
+  const have = new Map<string, number>()
+  for (const r of stockRows ?? []) have.set(r.variant_id, (have.get(r.variant_id) ?? 0) + r.quantity)
+  const wantedQty = new Map<string, number>()
+  for (const l of lines) wantedQty.set(l.variant_id, (wantedQty.get(l.variant_id) ?? 0) + l.quantity)
+  for (const [variantId, qty] of wantedQty) {
+    const left = Math.max(have.get(variantId) ?? 0, 0)
+    if (qty > left) {
+      const line = lines.find((l) => l.variant_id === variantId)!
+      return NextResponse.json({
+        error: left === 0
+          ? `${line.product_name} (${line.variant_name}) is out of stock. Remove it and try again.`
+          : `Only ${left} of ${line.product_name} (${line.variant_name}) left. Reduce the quantity and try again.`,
+      }, { status: 409 })
+    }
   }
 
   const subtotal = round2(lines.reduce((s, l) => s + l.price * l.quantity, 0))

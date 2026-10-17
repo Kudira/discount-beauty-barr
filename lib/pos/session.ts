@@ -58,7 +58,7 @@ export const sessionCookieOptions = {
 
 export function encodeSession(data: Omit<PosSession, 'exp'>): { value: string; maxAge: number } {
   const session: PosSession = { ...data, exp: Date.now() + SESSION_HOURS * 3600_000 }
-  return { value: encode(session), maxAge: SESSION_HOURS * 3600 }
+  return { value: encode(session as unknown as Record<string, unknown>), maxAge: SESSION_HOURS * 3600 }
 }
 
 /** Returns the active cashier for this browser, or null. Server-only. */

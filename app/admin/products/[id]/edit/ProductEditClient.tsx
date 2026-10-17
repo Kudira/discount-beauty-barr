@@ -149,7 +149,7 @@ export function ProductEditClient({ product }: { product: any }) {
         console.error('[DBB Upload] Error:', uploadError)
         setUploadMsg({
           type: 'error',
-          text: `Upload failed: ${uploadError.message}. Run supabase-phase7b.sql in your Supabase SQL Editor and make sure you are signed in.`,
+          text: `Upload failed: ${uploadError.message}. Make sure you are signed in as an admin.`,
         })
         return null
       }
@@ -262,6 +262,7 @@ export function ProductEditClient({ product }: { product: any }) {
       })
       const json = await res.json()
       if (!res.ok) { setError(json.error ?? 'Save failed'); return }
+      if (Array.isArray(json.warnings) && json.warnings.length > 0) { setError(json.warnings.join(' ')); return }
 
       setSaved(true)
       setTimeout(() => { setSaved(false); router.refresh() }, 2000)
@@ -447,9 +448,9 @@ export function ProductEditClient({ product }: { product: any }) {
                     onBlur={(e) => (e.target.style.borderColor = '#D4C5B8')} />
                 </div>
                 <div>
-                  <label style={labelStyle}>SKU</label>
+                  <label style={labelStyle}>SKU{v.isNew ? ' (automatic)' : ''}</label>
                   <input value={v.sku} onChange={(e) => updateVariant(vi, 'sku', e.target.value)}
-                    placeholder="e.g. ORD-030" style={inputStyle}
+                    placeholder={v.isNew ? 'Auto' : 'SKU'} style={inputStyle}
                     onFocus={(e) => (e.target.style.borderColor = '#B76E79')}
                     onBlur={(e) => (e.target.style.borderColor = '#D4C5B8')} />
                 </div>

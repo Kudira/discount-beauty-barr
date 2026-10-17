@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import { requireManager, requireAdmin, authErrorResponse } from '@/lib/auth/guards'
+
+const ROLES = ['super_admin', 'admin', 'manager', 'cashier', 'read_only', 'customer']
 
 function getAdmin() {
   return createSupabaseClient(
@@ -13,9 +16,26 @@ export async function PATCH(request: Request) {
   try {
     const body = await request.json()
     const { userId, role, branch_id, pos_pin } = body
+    if (typeof userId !== 'string' || !userId) return NextResponse.json({ error: 'Choose a user.' }, { status: 400 })
+
+    // Roles and branches: admins only. (PIN handling below is unchanged.)
+    const changesAccess = role !== undefined || branch_id !== undefined
+    const caller = changesAccess ? await requireAdmin() : await requireManager()
+
     const updates: Record<string, any> = {}
-    if (role !== undefined) updates.role = role
-    if (branch_id !== undefined) updates.branch_id = branch_id || null
+    if (changesAccess) {
+      if (role !== undefined) {
+        if (!ROLES.includes(role)) return NextResponse.json({ error: 'Unknown role.' }, { status: 400 })
+        if (userId === caller.id) return NextResponse.json({ error: 'You cannot change your own role.' }, { status: 403 })
+        const { data: target } = await getAdmin().from('profiles').select('role').eq('id', userId).maybeSingle()
+        if (!target) return NextResponse.json({ error: 'User not found.' }, { status: 404 })
+        if ((role === 'super_admin' || target.role === 'super_admin') && caller.role !== 'super_admin') {
+          return NextResponse.json({ error: 'Only a super admin can grant or remove super admin.' }, { status: 403 })
+        }
+        updates.role = role
+      }
+      if (branch_id !== undefined) updates.branch_id = branch_id || null
+    }
     if (pos_pin !== undefined) {
       if (pos_pin !== null && (typeof pos_pin !== 'string' || !/^\d{4,6}$/.test(pos_pin))) {
         return NextResponse.json({ error: 'PIN must be 4–6 digits' }, { status: 400 })
@@ -48,6 +68,6 @@ export async function PATCH(request: Request) {
     }
     return NextResponse.json({ success: true })
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+    return authErrorResponse(err) ?? NextResponse.json({ error: err.message }, { status: 500 })
   }
 }

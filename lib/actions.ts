@@ -1,47 +1,22 @@
 'use server'
 
-import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import { getServiceClient } from '@/lib/supabase/service'
+import { requireAdmin, requireManager } from '@/lib/auth/guards'
+import { setOrderStatus } from '@/lib/orders-status'
 
-// Admin client with service role — bypasses ALL RLS policies
-function getAdmin() {
-  return createSupabaseClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
-}
+// Every action here checks who is calling before it touches the database
+// (the service-role client bypasses RLS, so the check has to happen here).
 
 // ── Orders ──────────────────────────────────────────────────────────────────
-export async function createOrder(data: Record<string, any>) {
-  const admin = getAdmin()
-  const { data: order, error } = await admin
-    .from('orders')
-    .insert(data)
-    .select()
-    .single()
-  if (error) throw new Error(error.message)
-  return order
-}
-
-export async function createOrderItems(items: Record<string, any>[]) {
-  const admin = getAdmin()
-  const { error } = await admin.from('order_items').insert(items)
-  if (error) throw new Error(error.message)
-}
-
 export async function updateOrderStatus(orderId: string, status: string) {
-  const admin = getAdmin()
-  const { error } = await admin
-    .from('orders')
-    .update({ status })
-    .eq('id', orderId)
-  if (error) throw new Error(error.message)
+  const caller = await requireManager()
+  await setOrderStatus(orderId, status, caller)
 }
 
 // ── Products ─────────────────────────────────────────────────────────────────
 export async function createProduct(data: Record<string, any>) {
-  const admin = getAdmin()
-  const { data: product, error } = await admin
+  await requireManager()
+  const { data: product, error } = await getServiceClient()
     .from('products')
     .insert(data)
     .select()
@@ -51,17 +26,14 @@ export async function createProduct(data: Record<string, any>) {
 }
 
 export async function updateProduct(id: string, data: Record<string, any>) {
-  const admin = getAdmin()
-  const { error } = await admin
-    .from('products')
-    .update(data)
-    .eq('id', id)
+  await requireManager()
+  const { error } = await getServiceClient().from('products').update(data).eq('id', id)
   if (error) throw new Error(error.message)
 }
 
 export async function createVariant(data: Record<string, any>) {
-  const admin = getAdmin()
-  const { data: variant, error } = await admin
+  await requireManager()
+  const { data: variant, error } = await getServiceClient()
     .from('product_variants')
     .insert(data)
     .select('id')
@@ -71,82 +43,54 @@ export async function createVariant(data: Record<string, any>) {
 }
 
 export async function updateVariant(id: string, data: Record<string, any>) {
-  const admin = getAdmin()
-  const { error } = await admin
-    .from('product_variants')
-    .update(data)
-    .eq('id', id)
+  await requireManager()
+  const { error } = await getServiceClient().from('product_variants').update(data).eq('id', id)
   if (error) throw new Error(error.message)
 }
 
 // ── Inventory ─────────────────────────────────────────────────────────────────
 export async function createInventoryRows(rows: Record<string, any>[]) {
-  const admin = getAdmin()
-  const { error } = await admin.from('inventory').insert(rows)
-  if (error) console.warn('Inventory insert warn:', error.message)
-}
-
-export async function updateInventoryQty(id: string, quantity: number) {
-  const admin = getAdmin()
-  const { error } = await admin
+  await requireManager()
+  // upsert so an existing branch row is never duplicated or overwritten with 0
+  const { error } = await getServiceClient()
     .from('inventory')
-    .update({ quantity })
-    .eq('id', id)
-  if (error) throw new Error(error.message)
-}
-
-// ── Payments ──────────────────────────────────────────────────────────────────
-export async function createPayment(data: Record<string, any>) {
-  const admin = getAdmin()
-  const { error } = await admin.from('payments').insert(data)
-  if (error) console.warn('Payment insert warn:', error.message)
+    .upsert(rows, { onConflict: 'variant_id,branch_id', ignoreDuplicates: true })
+  if (error) console.warn('Inventory insert warn:', error.message)
 }
 
 // ── Activity log ──────────────────────────────────────────────────────────────
 export async function logActivity(data: Record<string, any>) {
   try {
-    const admin = getAdmin()
-    await admin.from('activity_log').insert(data)
-  } catch {}
-}
-
-// ── Email log ─────────────────────────────────────────────────────────────────
-export async function logEmail(data: Record<string, any>) {
-  try {
-    const admin = getAdmin()
-    await admin.from('email_log').insert(data)
+    const caller = await requireManager()
+    await getServiceClient().from('activity_log').insert({
+      action: String(data.action ?? 'unknown'),
+      entity_type: data.entity_type ?? null,
+      entity_id: data.entity_id ?? null,
+      details: data.details ?? {},
+      user_id: caller.id,
+      user_email: caller.email,
+      user_role: caller.role,
+    })
   } catch {}
 }
 
 // ── Users/Profiles ────────────────────────────────────────────────────────────
+const ROLES = ['super_admin', 'admin', 'manager', 'cashier', 'read_only', 'customer']
+
 export async function updateUserRole(userId: string, role: string) {
-  const admin = getAdmin()
-  const { error } = await admin
-    .from('profiles')
-    .update({ role })
-    .eq('id', userId)
-  if (error) throw new Error(error.message)
-}
+  const caller = await requireAdmin()
+  if (!ROLES.includes(role)) throw new Error('Unknown role.')
+  if (userId === caller.id) throw new Error('You cannot change your own role.')
 
-// ── Contact messages ─────────────────────────────────────────────────────────
-export async function saveContactMessage(data: Record<string, any>) {
-  const admin = getAdmin()
-  const { error } = await admin.from('activity_log').insert({
-    action: 'contact.message',
-    entity_type: 'contact',
-    ...data,
-  })
-  if (error) throw new Error(error.message)
-}
+  const db = getServiceClient()
+  const { data: target } = await db.from('profiles').select('role').eq('id', userId).maybeSingle()
+  if (!target) throw new Error('User not found.')
 
-// ── Transfer stock between branches ─────────────────────────────────────────
-export async function transferStock(
-  fromId: string, fromQty: number,
-  toId: string, toQty: number
-) {
-  const admin = getAdmin()
-  await Promise.all([
-    admin.from('inventory').update({ quantity: fromQty }).eq('id', fromId),
-    admin.from('inventory').update({ quantity: toQty }).eq('id', toId),
-  ])
+  const touchesSuper = role === 'super_admin' || target.role === 'super_admin'
+  if (touchesSuper && caller.role !== 'super_admin') {
+    throw new Error('Only a super admin can grant or remove super admin.')
+  }
+
+  const { error } = await db.from('profiles').update({ role }).eq('id', userId)
+  if (error) throw new Error(error.message)
 }

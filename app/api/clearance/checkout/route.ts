@@ -7,6 +7,7 @@ import { DELIVERY_FEE, FREE_DELIVERY_MINIMUM } from '@/lib/constants'
 import { getSiteOrigin } from '@/lib/site-url'
 import { processingFeeFor } from '@/lib/fees'
 import { insertOrderWithFee } from '@/lib/orders-insert'
+import { rateLimit, clientIp } from '@/lib/rate-limit'
 import { getCampaign, windowFor } from '@/lib/clearance'
 
 interface Body {
@@ -30,6 +31,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Your bag is empty.' }, { status: 400 })
   }
   const { customer, fulfillment } = body
+  // Slow down scripts that spam orders (each order holds stock / starts a payment).
+  if (!rateLimit(`checkout:ip:${clientIp(request)}`, 10, 10 * 60_000) ||
+      (typeof customer?.email === 'string' && !rateLimit(`checkout:email:${customer.email.toLowerCase()}`, 5, 10 * 60_000))) {
+    return NextResponse.json({ error: 'Too many attempts. Please wait a few minutes and try again.' }, { status: 429 })
+  }
   if (!customer?.email || !/^\S+@\S+\.\S+$/.test(customer.email) || !customer.firstName?.trim()) {
     return NextResponse.json({ error: 'Enter your name and a valid email address.' }, { status: 400 })
   }
@@ -42,7 +48,6 @@ export async function POST(request: Request) {
   if (fulfillment === 'delivery' && !body.address?.trim()) {
     return NextResponse.json({ error: 'Enter a delivery address.' }, { status: 400 })
   }
-  const branch = fulfillment === 'pickup' ? (['osu', 'east-legon'].includes(body.branch ?? '') ? body.branch! : 'osu') : null
 
   for (const i of body.items) {
     if (typeof i.variantId !== 'string' || !Number.isInteger(i.quantity) || i.quantity < 1 || i.quantity > 15) {
@@ -51,6 +56,13 @@ export async function POST(request: Request) {
   }
 
   const db = getServiceClient()
+
+  let branch: string | null = null
+  if (fulfillment === 'pickup') {
+    const { data: branches } = await db.from('branches').select('id').eq('is_active', true).order('name')
+    const branchIds = (branches ?? []).map((b: any) => b.id as string)
+    branch = branchIds.includes(body.branch ?? '') ? body.branch! : (branchIds[0] ?? null)
+  }
 
   // ── The sale must be open right now ───────────────────────────────────────
   const campaign = await getCampaign()
@@ -149,6 +161,19 @@ export async function POST(request: Request) {
   if (itemsErr) {
     await db.from('orders').update({ status: 'cancelled' }).eq('id', order.id)
     return NextResponse.json({ error: 'Could not save your order items. Try again.' }, { status: 500 })
+  }
+
+  // The check above and the insert are two steps, so two people buying the last
+  // item at the same moment could both pass. Count again now that our order is
+  // in (pending orders hold stock): if more is reserved than the sale has, back out.
+  const { data: recheck } = await db
+    .from('sale_item_availability')
+    .select('variant_id, sale_qty, reserved')
+    .eq('campaign_id', campaign.id)
+    .in('variant_id', ids)
+  if ((recheck ?? []).some((r: any) => Number(r.reserved) > Number(r.sale_qty))) {
+    await db.from('orders').update({ status: 'cancelled' }).eq('id', order.id)
+    return NextResponse.json({ error: 'Someone just bought the last of an item in your bag. Refresh and try again.' }, { status: 409 })
   }
 
   const reference = `${order.order_number}-${randomBytes(3).toString('hex')}`

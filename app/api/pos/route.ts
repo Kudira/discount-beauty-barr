@@ -5,6 +5,7 @@ import { toPesewas, verifyTransaction } from '@/lib/paystack'
 import { checkTillSale } from '@/lib/clearance'
 import { processingFeeFor } from '@/lib/fees'
 import { insertOrderWithFee } from '@/lib/orders-insert'
+import { deductAtBranch } from '@/lib/stock'
 
 // POS method ids → payments.method enum ('card' | 'mobile_money' | 'cash' | 'bank_transfer')
 const METHOD_TO_DB: Record<string, string> = {
@@ -114,6 +115,27 @@ export async function POST(request: Request) {
     )
     if (payError) problems.push(`payments: ${payError.message}`)
 
+    // ── Stock: take the items off this branch's shelf. Clearance-sale lines are
+    // tracked by the sale itself. If an item was at 0 (new stock not recorded
+    // yet) the count goes negative and the till is told, so it can be fixed in
+    // Admin > Inventory later. Stock problems never block or undo a sale.
+    let negativeStock: { variantId: string; sku?: string; name?: string; now: number }[] = []
+    try {
+      const clearanceIds = new Set(sale.clearanceVariantIds ?? [])
+      const stockLines = (orderItems ?? [])
+        .filter((i) => i.variant_id && !clearanceIds.has(i.variant_id))
+        .map((i) => ({ variant_id: i.variant_id as string, quantity: Number(i.quantity) }))
+      if (stockLines.length > 0 && orderData.branch_id) {
+        const result = await deductAtBranch(order.id, orderData.branch_id, stockLines)
+        negativeStock = result.negative.map((m) => {
+          const line = (orderItems ?? []).find((i) => i.variant_id === m.variantId)
+          return { variantId: m.variantId, sku: line?.sku, name: line ? `${line.product_name} (${line.variant_name})` : undefined, now: m.after }
+        })
+      }
+    } catch (e) {
+      console.error('[POS API] stock update failed', e)
+    }
+
     await db.from('activity_log').insert({
       user_id: session.staffId,
       user_role: session.role,
@@ -129,6 +151,7 @@ export async function POST(request: Request) {
         paid_by: payments
           .map((p) => (p.method === 'momo' && p.provider ? `momo (${p.provider})` : p.method))
           .join(' + '),
+        ...(negativeStock.length ? { negative_stock: negativeStock } : {}),
         ...(problems.length ? { save_warnings: problems.join('; ') } : {}),
       },
     })
@@ -136,12 +159,12 @@ export async function POST(request: Request) {
     if (problems.length) {
       console.error('[POS API] partial save', order.order_number, problems)
       return NextResponse.json(
-        { success: true, partial: true, orderId: order.id, orderNumber: order.order_number, warning: problems.join('; ') },
+        { success: true, partial: true, orderId: order.id, orderNumber: order.order_number, warning: problems.join('; '), negativeStock },
         { status: 207 }
       )
     }
 
-    return NextResponse.json({ success: true, orderId: order.id, orderNumber: order.order_number })
+    return NextResponse.json({ success: true, orderId: order.id, orderNumber: order.order_number, negativeStock })
   } catch (err: any) {
     console.error('[POS API]', err)
     return NextResponse.json({ error: err.message ?? 'Internal error' }, { status: 500 })

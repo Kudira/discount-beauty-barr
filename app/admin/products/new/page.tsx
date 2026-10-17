@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Plus, Trash2, Wand2 } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2 } from 'lucide-react'
 import { slugify } from '@/lib/utils'
 import { createProduct, createVariant, createInventoryRows, logActivity } from '@/lib/actions'
 import { PRODUCT_CATEGORIES } from '@/lib/constants'
@@ -22,10 +22,6 @@ const labelStyle: React.CSSProperties = {
 }
 
 interface Brand { id: string; name: string; sku_prefix: string }
-
-function genSku(prefix: string, category: string, idx: number) {
-  return `${prefix.toUpperCase()}-${category.slice(0,2).toUpperCase()}-${String(idx).padStart(3,'0')}`
-}
 
 export default function NewProductPage() {
   const router = useRouter()
@@ -75,14 +71,8 @@ export default function NewProductPage() {
     setSavingBrand(false)
   }
 
-  const autoFillSkus = () => {
-    if (!selectedBrand) return
-    setVariants(vs => vs.map((v, i) => ({ ...v, sku: genSku(selectedBrand.sku_prefix, form.category, i + 1) })))
-  }
-
   const addVariant = () => {
-    const sku = selectedBrand ? genSku(selectedBrand.sku_prefix, form.category, variants.length + 1) : ''
-    setVariants(p => [...p, { name: '', sku, price: '', stockOsu: '0', stockEastLegon: '0' }])
+    setVariants(p => [...p, { name: '', sku: '', price: '', stockOsu: '0', stockEastLegon: '0' }])
   }
 
   const removeVariant = (i: number) => setVariants(p => p.filter((_,idx) => idx !== i))
@@ -93,12 +83,23 @@ export default function NewProductPage() {
     e.preventDefault()
     setError('')
     if (!form.brand) { setError('Please select a brand.'); return }
-    if (variants.some(v => !v.name || !v.sku || !v.price)) {
-      setError('All variant fields (name, SKU, price) are required.')
+    if (variants.some(v => !v.name || !v.price)) {
+      setError('Every variant needs a name and a price. SKUs are made for you.')
       return
     }
     setSaving(true)
     try {
+      // SKUs: leave blank and the next ones in the shop's pattern are assigned.
+      const missing = variants.filter(v => !v.sku.trim()).length
+      let fresh: string[] = []
+      if (missing > 0) {
+        const r = await fetch(`/api/admin/sku?brand=${encodeURIComponent(form.brand)}&count=${missing}`)
+        const j = await r.json()
+        if (!r.ok) throw new Error(j.error ?? 'Could not create SKUs.')
+        fresh = j.skus
+      }
+      const finalSkus = variants.map(v => v.sku.trim() || fresh.shift()!)
+
       const product = await createProduct({
         name: form.name,
         slug: slugify(form.name),
@@ -111,8 +112,8 @@ export default function NewProductPage() {
       })
 
       const inventoryRows: any[] = []
-      for (const v of variants) {
-        const variant = await createVariant({ product_id: product.id, name: v.name, sku: v.sku, price: Number(v.price) })
+      for (const [vi, v] of variants.entries()) {
+        const variant = await createVariant({ product_id: product.id, name: v.name, sku: finalSkus[vi], price: Number(v.price) })
         inventoryRows.push(
           { variant_id: variant.id, branch_id: 'osu', quantity: parseInt(v.stockOsu) || 0, low_stock_threshold: 5 },
           { variant_id: variant.id, branch_id: 'east-legon', quantity: parseInt(v.stockEastLegon) || 0, low_stock_threshold: 5 },
@@ -229,13 +230,7 @@ export default function NewProductPage() {
               Variants & Stock
             </h2>
             <div className="flex items-center gap-3">
-              {selectedBrand && (
-                <button type="button" onClick={autoFillSkus}
-                  className="flex items-center gap-1.5"
-                  style={{ padding: '5px 10px', background: '#F2EDE8', border: 'none', borderRadius: '4px', cursor: 'pointer', fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '12px', color: '#2C2420' }}>
-                  <Wand2 size={12} /> Auto-fill SKUs
-                </button>
-              )}
+
               <button type="button" onClick={addVariant}
                 className="flex items-center gap-1.5"
                 style={{ fontFamily: "'Cormorant Garamond', serif", fontStyle: 'italic', fontSize: '14px', color: '#B76E79', background: 'none', border: 'none', cursor: 'pointer' }}>
@@ -246,7 +241,7 @@ export default function NewProductPage() {
 
           {selectedBrand && (
             <p style={{ fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '11px', color: '#8C7B74', marginBottom: '12px', background: '#FAF7F4', padding: '6px 10px', borderRadius: '4px' }}>
-              SKU format for <strong>{selectedBrand.name}</strong>: {selectedBrand.sku_prefix}-{form.category.slice(0,2).toUpperCase()}-001
+              SKUs for <strong>{selectedBrand.name}</strong> are made automatically, like {selectedBrand.sku_prefix}-0645. Leave the SKU box empty.
             </p>
           )}
 
@@ -272,9 +267,9 @@ export default function NewProductPage() {
                       placeholder="e.g. 30ml" style={inputStyle} />
                   </div>
                   <div>
-                    <label style={labelStyle}>SKU *</label>
-                    <input required value={v.sku} onChange={e => updateVariant(i, 'sku', e.target.value)}
-                      placeholder="e.g. ORD-SK-001" style={inputStyle} />
+                    <label style={labelStyle}>SKU (automatic)</label>
+                    <input value={v.sku} onChange={e => updateVariant(i, 'sku', e.target.value)}
+                      placeholder="Auto" style={inputStyle} />
                   </div>
                   <div>
                     <label style={labelStyle}>Price (GHS) *</label>

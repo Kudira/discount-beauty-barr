@@ -46,7 +46,7 @@ export function InventoryClient({
 }: { inventory: InventoryRecord[]; variants: VariantRecord[]; branches: Branch[] }) {
   const [search, setSearch] = useState('')
   const [branchFilter, setBranchFilter] = useState<'all' | string>('all')
-  const [stockFilter, setStockFilter] = useState<'all' | 'low' | 'out' | 'unset'>('all')
+  const [stockFilter, setStockFilter] = useState<'all' | 'low' | 'out' | 'negative' | 'unset'>('all')
   const [visibility, setVisibility] = useState<'all' | 'active' | 'hidden'>('all')
   const [editing, setEditing] = useState<Record<string, number>>({})
   const [saving, setSaving] = useState<string | null>(null)
@@ -82,6 +82,7 @@ export function InventoryClient({
 
   const isLow = (r: Row) => r.exists && r.quantity > 0 && r.quantity <= r.threshold
   const isOut = (r: Row) => r.exists && r.quantity === 0
+  const isNeg = (r: Row) => r.exists && r.quantity < 0 // sold at the till before the stock was recorded
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
@@ -93,6 +94,7 @@ export function InventoryClient({
       const matchStock = stockFilter === 'all' ||
         (stockFilter === 'out' && isOut(r)) ||
         (stockFilter === 'low' && isLow(r)) ||
+        (stockFilter === 'negative' && isNeg(r)) ||
         (stockFilter === 'unset' && !r.exists)
       const matchVis = visibility === 'all' || (visibility === 'active' ? p?.is_active !== false : p?.is_active === false)
       return matchSearch && matchBranch && matchStock && matchVis
@@ -103,6 +105,7 @@ export function InventoryClient({
     total: rows.length,
     outOfStock: rows.filter(isOut).length,
     lowStock: rows.filter(isLow).length,
+    negative: rows.filter(isNeg).length,
     unset: rows.filter((r) => !r.exists).length,
   }), [rows])
 
@@ -162,6 +165,7 @@ export function InventoryClient({
 
   const getStockStatus = (row: Row) => {
     if (!row.exists) return { label: 'Not set up', color: '#8C7B74', bg: '#F2EDE8' }
+    if (row.quantity < 0) return { label: 'Negative: recount', color: '#9D174D', bg: '#FCE7F3' }
     if (row.quantity === 0) return { label: 'Out of Stock', color: '#DC2626', bg: '#FEF2F2' }
     if (row.quantity <= row.threshold) return { label: 'Low Stock', color: '#D97706', bg: '#FEF3C7' }
     return { label: 'In Stock', color: '#16A34A', bg: '#F0FDF4' }
@@ -199,11 +203,12 @@ export function InventoryClient({
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
         {[
           { label: 'Product × branch', value: stats.total, color: '#2C2420', bg: 'white' },
           { label: 'Low Stock', value: stats.lowStock, color: '#D97706', bg: '#FEF3C7' },
           { label: 'Out of Stock', value: stats.outOfStock, color: '#DC2626', bg: '#FEF2F2' },
+          { label: 'Negative', value: stats.negative, color: '#9D174D', bg: '#FCE7F3' },
           { label: 'Not set up', value: stats.unset, color: '#8C7B74', bg: '#F2EDE8' },
         ].map((s) => (
           <div key={s.label} className="p-4 text-center"
@@ -240,6 +245,7 @@ export function InventoryClient({
           <option value="all">All Stock Levels</option>
           <option value="low">Low Stock</option>
           <option value="out">Out of Stock</option>
+          <option value="negative">Negative (sold, not recorded)</option>
           <option value="unset">Not set up</option>
         </select>
         <select value={visibility} onChange={(e) => setVisibility(e.target.value as any)} style={{ ...inputStyle, cursor: 'pointer' }}>

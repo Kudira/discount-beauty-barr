@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
+import { requireManager, authErrorResponse } from '@/lib/auth/guards'
 
-// /api/admin/* is already gated by middleware (admin / manager / super admin).
+// Gated by middleware AND checked again here (admin / manager / super admin).
 
 function getAdmin() {
   return createSupabaseClient(
@@ -36,6 +37,7 @@ async function branchExists(admin: ReturnType<typeof getAdmin>, id: unknown) {
 // branch has none yet, so stock can be added at any branch.
 export async function PATCH(request: Request) {
   try {
+    await requireManager()
     const { variantId, branchId, quantity } = await request.json()
     if (typeof variantId !== 'string' || !variantId) return NextResponse.json({ error: 'Choose a product variant.' }, { status: 400 })
     if (!validQty(quantity)) return NextResponse.json({ error: 'Quantity must be a whole number, 0 or more.' }, { status: 400 })
@@ -80,7 +82,7 @@ export async function PATCH(request: Request) {
 
     return NextResponse.json({ success: true, inventoryId, quantity })
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+    return authErrorResponse(err) ?? NextResponse.json({ error: err.message }, { status: 500 })
   }
 }
 
@@ -89,6 +91,7 @@ export async function PATCH(request: Request) {
 // written to stock_transfers.
 export async function POST(request: Request) {
   try {
+    await requireManager()
     const { variantId, fromBranch, toBranch, quantity, note } = await request.json()
     if (typeof variantId !== 'string' || !variantId) return NextResponse.json({ error: 'Choose a product variant.' }, { status: 400 })
     if (!Number.isInteger(quantity) || quantity < 1) return NextResponse.json({ error: 'Quantity must be at least 1.' }, { status: 400 })
@@ -152,6 +155,6 @@ export async function POST(request: Request) {
       to: { id: toId, quantity: newTo },
     })
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+    return authErrorResponse(err) ?? NextResponse.json({ error: err.message }, { status: 500 })
   }
 }

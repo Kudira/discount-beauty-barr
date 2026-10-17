@@ -42,7 +42,7 @@ export function POSVariantModal({ product, onSelect, onClose }: POSVariantModalP
           </p>
           {product.variants.map((v) => {
             const lowStock = v.stock > 0 && v.stock <= 5
-            const noStock = v.stock === 0
+            const noStock = v.stock <= 0
             return (
               <button key={v.id}
                 onClick={() => { onSelect(product, v.id); onClose() }}
@@ -64,7 +64,7 @@ export function POSVariantModal({ product, onSelect, onClose }: POSVariantModalP
                       </p>
                       {noStock
                         ? <span style={{ fontSize: '10px', color: '#D97706', fontFamily: "'Jost', sans-serif", display: 'flex', alignItems: 'center', gap: '3px' }}>
-                            <AlertCircle size={10} /> Not tracked
+                            <AlertCircle size={10} /> 0 recorded · can still sell
                           </span>
                         : lowStock
                         ? <span style={{ fontSize: '10px', color: '#D97706', fontFamily: "'Jost', sans-serif" }}>

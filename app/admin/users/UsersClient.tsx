@@ -124,13 +124,17 @@ export function UsersClient({ users }: { users: any[] }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, role: editRole, branch_id: editBranch || null }),
       })
-      if (!res.ok) throw new Error('Failed to update')
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        throw new Error(json.error ?? 'Failed to update')
+      }
       setLocalUsers((p) => p.map((u) => u.id === userId ? { ...u, role: editRole, branch_id: editBranch || null } : u))
       logActivity({ action: 'user.role_updated', entity_type: 'user', entity_id: userId, details: { new_role: editRole, branch: editBranch } }).catch(() => {})
       setEditingId(null)
       router.refresh()
     } catch (err: any) {
       console.error('Role update failed:', err)
+      alert(err?.message ?? 'Could not update this user.')
     } finally {
       setSaving(false)
     }

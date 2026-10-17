@@ -181,7 +181,7 @@ type TillLine = { variant_id?: string; price?: number; quantity?: number; produc
  * order with (when it holds clearance items), or an error message to show the
  * cashier. Never trusts the browser's prices or stock.
  */
-export async function checkTillSale(lines: TillLine[]): Promise<{ campaignId: string | null; error?: string }> {
+export async function checkTillSale(lines: TillLine[]): Promise<{ campaignId: string | null; clearanceVariantIds?: string[]; error?: string }> {
   const ids = lines.map((l) => l.variant_id).filter((x): x is string => !!x)
   if (ids.length === 0) return { campaignId: null }
 
@@ -223,5 +223,5 @@ export async function checkTillSale(lines: TillLine[]): Promise<{ campaignId: st
       return { campaignId: null, error: `Only ${remaining} of ${name} left in the clearance sale. Reduce the quantity.` }
     }
   }
-  return { campaignId: campaign.id }
+  return { campaignId: campaign.id, clearanceVariantIds: [...price.keys()] }
 }

@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { CheckCircle, AlertCircle } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
 
 type FormState = 'idle' | 'submitting' | 'success' | 'error'
 
@@ -36,39 +35,14 @@ export function ContactForm() {
     setErrorMsg('')
 
     try {
-      const supabase = createClient()
-
-      // Save to activity log so admin can see it
-      await (supabase as any).from('activity_log').insert({
-        action: 'contact.message',
-        entity_type: 'contact',
-        user_email: form.email,
-        details: {
-          name: form.name,
-          phone: form.phone || null,
-          subject: form.subject,
-          message: form.message,
-        },
+      const res = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: form.name, email: form.email, phone: form.phone, subject: form.subject, message: form.message }),
       })
-
-      // Attempt to send email notification (if edge function deployed)
-      try {
-        await supabase.functions.invoke('send-email', {
-          body: {
-            to: 'hello@discountbeautybarr.com',
-            subject: `New Contact Form: ${form.subject}`,
-            html: `
-              <h2>New message from ${form.name}</h2>
-              <p><strong>Email:</strong> ${form.email}</p>
-              ${form.phone ? `<p><strong>Phone:</strong> ${form.phone}</p>` : ''}
-              <p><strong>Subject:</strong> ${form.subject}</p>
-              <p><strong>Message:</strong></p>
-              <p>${form.message.replace(/\n/g, '<br>')}</p>
-            `,
-          },
-        })
-      } catch {
-        // Email not configured yet — form still saved, continue
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j.error ?? 'Could not send your message.')
       }
 
       setState('success')

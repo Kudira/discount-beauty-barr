@@ -3,6 +3,7 @@ import { toPesewas, verifyTransaction } from '@/lib/paystack'
 import { sendEmailServer } from '@/lib/email/sendEmailServer'
 import { orderConfirmationTemplate } from '@/lib/email/templates'
 import { BRANCHES } from '@/lib/constants'
+import { alreadyDeducted, deductForOnlineOrder } from '@/lib/stock'
 
 export type ConfirmResult =
   | { state: 'paid'; orderNumber: string }
@@ -19,7 +20,7 @@ export async function confirmOnlinePayment(reference: string): Promise<ConfirmRe
 
   const { data: payment } = await db
     .from('payments')
-    .select('id, status, amount, order_id, orders(id, order_number, status, customer_name, customer_email, fulfillment, delivery_address, branch_id, subtotal, delivery_fee, discount, total, processing_fee)')
+    .select('id, status, amount, order_id, orders(id, order_number, status, customer_name, customer_email, fulfillment, delivery_address, branch_id, subtotal, delivery_fee, discount, total, processing_fee, sale_campaign_id)')
     .eq('reference', reference)
     .maybeSingle()
 
@@ -71,6 +72,21 @@ export async function confirmOnlinePayment(reference: string): Promise<ConfirmRe
   if (!claimed || claimed.length === 0) return { state: 'paid', orderNumber }
 
   await db.from('orders').update({ status: 'confirmed' }).eq('id', payment.order_id).eq('status', 'pending')
+
+  // Take the items off the shelves (once). Clearance-campaign orders are
+  // counted by the sale itself, not by inventory. Never blocks the payment.
+  try {
+    if (!order?.sale_campaign_id && !(await alreadyDeducted(payment.order_id))) {
+      const { data: stockItems } = await db.from('order_items').select('variant_id, quantity').eq('order_id', payment.order_id)
+      await deductForOnlineOrder(
+        payment.order_id,
+        order?.fulfillment === 'pickup' ? order?.branch_id ?? null : null,
+        (stockItems ?? []) as any
+      )
+    }
+  } catch (err) {
+    console.error('[confirmOnlinePayment] stock update failed', err)
+  }
 
   // Count the promo code use now that it's paid for.
   const promo = tx.metadata?.promo_code

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { CheckCircle, Truck, MapPin, User, Mail, Phone, Clock, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { updateOrderStatus, logActivity } from '@/lib/actions'
+import { updateOrderStatus } from '@/lib/actions'
 import { sendEmail } from '@/lib/email/sendEmail'
 import { orderStatusUpdateTemplate } from '@/lib/email/templates'
 import { formatCurrency } from '@/lib/utils'
@@ -53,14 +53,6 @@ export function OrderDetailClient({ order }: { order: OrderWithItems }) {
           setEmailSent(result)
         } catch {}
       }
-
-      // Log activity non-blocking
-      logActivity({
-        action: 'order.status_updated',
-        entity_type: 'order',
-        entity_id: order.id,
-        details: { from: order.status, to: status, order_number: order.order_number },
-      }).catch(() => {})
 
       setSaved(true)
       setTimeout(() => { setSaved(false); router.refresh() }, 1500)

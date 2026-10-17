@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import { requireManager, authErrorResponse } from '@/lib/auth/guards'
 
 function admin() {
   return createSupabaseClient(
@@ -24,6 +25,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    await requireManager()
     const { name, sku_prefix } = await request.json()
     if (!name || !sku_prefix) return NextResponse.json({ error: 'Name and SKU prefix required' }, { status: 400 })
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
@@ -32,6 +34,6 @@ export async function POST(request: Request) {
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
     return NextResponse.json({ brand: data })
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+    return authErrorResponse(err) ?? NextResponse.json({ error: err.message }, { status: 500 })
   }
 }

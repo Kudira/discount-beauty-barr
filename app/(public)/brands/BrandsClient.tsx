@@ -64,7 +64,7 @@ export function BrandsClient({ brands, categories }: BrandsClientProps) {
         {/* Category filters */}
         <div className="flex flex-wrap gap-2">
           <button onClick={() => setActiveCategory('all')}
-            style={{ padding: '6px 16px', borderRadius: '99px', border: 'none', cursor: 'pointer', fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '13px', background: activeCategory === 'all' ? '#2C2420' : 'white', color: activeCategory === 'all' ? 'white' : '#8C7B74', border: `1px solid ${activeCategory === 'all' ? 'transparent' : '#E8DDD4'}`, transition: 'all 0.15s' }}>
+            style={{ padding: '6px 16px', borderRadius: '99px', cursor: 'pointer', fontFamily: "'Jost', sans-serif", fontWeight: 300, fontSize: '13px', background: activeCategory === 'all' ? '#2C2420' : 'white', color: activeCategory === 'all' ? 'white' : '#8C7B74', border: `1px solid ${activeCategory === 'all' ? 'transparent' : '#E8DDD4'}`, transition: 'all 0.15s' }}>
             All Categories
           </button>
           {categories.map((cat) => (

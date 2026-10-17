@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
-import { slugify } from '@/lib/utils'
+import { requireManager, authErrorResponse } from '@/lib/auth/guards'
+import { nextSkus } from '@/lib/sku'
 
 function getAdmin() {
   return createSupabaseClient(
@@ -12,9 +13,14 @@ function getAdmin() {
 
 export async function PATCH(request: Request) {
   try {
+    await requireManager()
     const body = await request.json()
     const { productId, product, variants } = body
     const admin = getAdmin()
+    const warnings: string[] = []
+
+    const { data: branchRows } = await admin.from('branches').select('id').eq('is_active', true)
+    const branchIds: string[] = (branchRows ?? []).map((b: any) => b.id)
 
     // Update product
     const { error: productErr } = await admin
@@ -29,24 +35,30 @@ export async function PATCH(request: Request) {
     // Update/create variants
     for (const v of variants ?? []) {
       const cleanImgs = (v.images ?? []).filter(Boolean)
-      if (v.isNew && v.name && v.sku && v.price) {
+      if (v.isNew && v.name && v.price) {
+        // No SKU typed? Make the next one in the shop's pattern automatically.
+        const sku = (typeof v.sku === 'string' && v.sku.trim())
+          ? v.sku.trim()
+          : (await nextSkus(product?.brand, 1))[0]
         const { data: newVar, error: varErr } = await admin
           .from('product_variants')
-          .insert({ product_id: productId, name: v.name, sku: v.sku, price: Number(v.price), images: cleanImgs })
+          .insert({ product_id: productId, name: v.name, sku, price: Number(v.price), images: cleanImgs })
           .select('id')
           .single()
 
-        if (!varErr && newVar?.id) {
-          await admin.from('inventory').insert([
-            { variant_id: newVar.id, branch_id: 'osu', quantity: 0, low_stock_threshold: 5 },
-            { variant_id: newVar.id, branch_id: 'east-legon', quantity: 0, low_stock_threshold: 5 },
-          ])
+        if (varErr) {
+          warnings.push(`Variant "${v.name}" was not added: ${varErr.message}`)
+        } else if (newVar?.id) {
+          await admin.from('inventory').upsert(
+            branchIds.map((b) => ({ variant_id: newVar.id, branch_id: b, quantity: 0, low_stock_threshold: 5 })),
+            { onConflict: 'variant_id,branch_id', ignoreDuplicates: true }
+          )
         }
       } else if (!v.isNew && v.id) {
-        await admin
-          .from('product_variants')
-          .update({ name: v.name, sku: v.sku, price: Number(v.price), images: cleanImgs })
-          .eq('id', v.id)
+        const patch: Record<string, any> = { name: v.name, price: Number(v.price), images: cleanImgs }
+        if (typeof v.sku === 'string' && v.sku.trim()) patch.sku = v.sku.trim()
+        const { error: updErr } = await admin.from('product_variants').update(patch).eq('id', v.id)
+        if (updErr) warnings.push(`Variant "${v.name}" was not saved: ${updErr.message}`)
       }
     }
 
@@ -58,8 +70,8 @@ export async function PATCH(request: Request) {
       details: { name: product.name },
     })
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true, warnings })
   } catch (err: any) {
-    return NextResponse.json({ error: err.message ?? 'Internal error' }, { status: 500 })
+    return authErrorResponse(err) ?? NextResponse.json({ error: err.message ?? 'Internal error' }, { status: 500 })
   }
 }

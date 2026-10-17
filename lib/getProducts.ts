@@ -31,16 +31,28 @@ async function getStockMap(supabase: any): Promise<Record<string, number>> {
   try {
     let reader = supabase
     try { if (process.env.SUPABASE_SERVICE_ROLE_KEY) reader = createAdminClient() } catch {}
-    const { data } = await reader
-      .from('inventory')
-      .select('variant_id, quantity')
-    if (!data) return {}
-    // Sum stock across both branches per variant
-    return data.reduce((acc: Record<string, number>, row: any) => {
+    // Supabase returns at most 1000 rows per request, so read in pages.
+    const rows: any[] = []
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await reader
+        .from('inventory')
+        .select('variant_id, quantity')
+        .order('id')
+        .range(from, from + 999)
+      if (error) { console.error('[getStockMap]', error.message); break }
+      rows.push(...(data ?? []))
+      if (!data || data.length < 1000) break
+    }
+    // Sum stock across all branches per variant. A negative total (sold before
+    // it was recorded) shows as 0 to customers and at the till.
+    const sums = rows.reduce((acc: Record<string, number>, row: any) => {
       acc[row.variant_id] = (acc[row.variant_id] ?? 0) + row.quantity
       return acc
     }, {})
-  } catch {
+    for (const k of Object.keys(sums)) sums[k] = Math.max(sums[k], 0)
+    return sums
+  } catch (err) {
+    console.error('[getStockMap] failed', err)
     return {}
   }
 }
